@@ -2220,6 +2220,11 @@
             box-shadow: 0 10px 20px rgba(37, 99, 235, 0.24);
         }
 
+        .email-avatar.has-avatar,
+        .email-detail-avatar.has-avatar {
+            background: transparent;
+        }
+
         .account-details h4,
         .email-subject {
             letter-spacing: -0.02em;
@@ -4464,12 +4469,13 @@ example3@outlook.com----password3----refresh_token3----client_id3"></textarea>
             const safeUrl = avatarUrl ? escapeHtml(avatarUrl) : '';
             const hasAvatar = Boolean(avatarUrl);
             const fallbackClass = hasAvatar ? 'avatar-fallback hidden' : 'avatar-fallback';
+            const avatarClassName = hasAvatar ? `${className} has-avatar` : className;
             const imageMarkup = hasAvatar
                 ? `<img src="${safeUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove(); const fallback = this.parentElement.querySelector('.avatar-fallback'); if (fallback) fallback.classList.remove('hidden');">`
                 : '';
 
             return `
-                <div class="${className}">
+                <div class="${avatarClassName}">
                     ${imageMarkup}
                     <span class="${fallbackClass}">${safeInitial}</span>
                 </div>
