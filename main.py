@@ -59,6 +59,7 @@ EMAIL_TAGS_FILE = Path(os.getenv("EMAIL_TAGS_FILE", str(DATA_DIR / "email_tags.j
 SITE_SETTINGS_FILE = Path(os.getenv("SITE_SETTINGS_FILE", str(DATA_DIR / "site_settings.json")))
 STATIC_DIR = BASE_DIR / "static"
 ICON_CACHE_DIR = DATA_DIR / "icon_cache"
+ICON_ASSET_DIR = STATIC_DIR / "assets" / "icons"
 SESSION_COOKIE = "outlookmanager_session"
 SESSION_TTL_HOURS = max(1, int(os.getenv("SESSION_TTL_HOURS", "24")))
 API_KEY_PREFIX = "om_"
@@ -96,6 +97,21 @@ CLASSIFICATION_KEY_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 ADMIN_LOGIN_PATH_PATTERN = re.compile(r"^/[a-zA-Z0-9/_-]{2,120}$")
 HOSTNAME_PATTERN = re.compile(r"^[a-z0-9.-]+(?::\d{1,5})?$")
 SAFE_BROWSER_METHODS = {"GET", "HEAD", "OPTIONS"}
+LOCAL_DOMAIN_ICON_RULES: list[tuple[str, tuple[str, ...]]] = [
+    (
+        "microsoft.svg",
+        (
+            "microsoft.com",
+            "microsoftonline.com",
+            "outlook.com",
+            "live.com",
+            "hotmail.com",
+            "office.com",
+            "office365.com",
+            "msn.com",
+        ),
+    ),
+]
 
 # 日志配置
 logging.basicConfig(
@@ -3650,6 +3666,20 @@ def get_domain_icon_cache_paths(domain: str, size: int) -> tuple[Path, Path]:
     )
 
 
+def resolve_local_domain_icon_path(domain: str) -> Path | None:
+    normalized_domain = normalize_hostname(domain)
+    if not normalized_domain:
+        return None
+
+    host = normalized_domain.split(":", 1)[0].strip().lower()
+    for filename, suffixes in LOCAL_DOMAIN_ICON_RULES:
+        if any(host == suffix or host.endswith("." + suffix) for suffix in suffixes):
+            icon_path = ICON_ASSET_DIR / filename
+            if icon_path.exists():
+                return icon_path
+    return None
+
+
 async def fetch_remote_domain_icon(domain: str, size: int) -> tuple[bytes | None, str | None]:
     sources = [
         f"https://www.google.com/s2/favicons?sz={size}&domain_url={quote(f'https://{domain}', safe='')}",
@@ -3678,6 +3708,10 @@ async def get_cached_domain_icon(domain: str, size: int = Query(128, ge=16, le=2
     normalized_domain = normalize_hostname(domain)
     if not normalized_domain:
         return Response(content=build_domain_icon_svg(domain), media_type="image/svg+xml")
+
+    local_icon_path = resolve_local_domain_icon_path(normalized_domain)
+    if local_icon_path is not None:
+        return FileResponse(local_icon_path, media_type="image/svg+xml")
 
     cache_file, meta_file = get_domain_icon_cache_paths(normalized_domain, size)
     if cache_file.exists() and meta_file.exists():

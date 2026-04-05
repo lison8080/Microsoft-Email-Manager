@@ -122,12 +122,64 @@
         footer a {
             transition: color 0.2s;
         }
-        .platform-logo {
-            width: 42px;
-            height: 42px;
+        .site-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        .site-logo-badge {
+            width: 2.75rem;
+            height: 2.75rem;
+            border-radius: 0.95rem;
+            background: linear-gradient(180deg, #132b3b 0%, #0f1f2c 100%);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+        .site-logo-image {
+            width: 2rem;
+            height: 2rem;
             object-fit: contain;
             display: block;
-            margin-bottom: 0.25rem;
+        }
+        .site-brand-copy {
+            min-width: 0;
+        }
+        .site-brand-title {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .platform-option {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 0.45rem;
+            min-height: 7.4rem;
+        }
+        .platform-logo-shell {
+            width: 3.25rem;
+            height: 3.25rem;
+            border-radius: 1rem;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+        .platform-logo {
+            width: 1.9rem;
+            height: 1.9rem;
+            object-fit: contain;
+            display: block;
+            flex-shrink: 0;
         }
         ::selection {
             background: #1e6f9f;
@@ -149,17 +201,23 @@
 
     <nav class="bg-white/80 backdrop-blur-md border-b border-gray-200/80 sticky top-0 z-50 shadow-sm">
         <div class="container-custom mx-auto flex flex-wrap justify-between items-center py-3 md:py-4">
-            <div class="flex items-center space-x-2">
-                <i class="fas fa-envelope-open-text text-2xl text-sky-700"></i>
-                <span class="font-bold text-xl tracking-tight text-gray-800">Microsoft<span class="text-sky-700">-Email-Manager</span></span>
-                <span class="hidden md:inline-block ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">v2.0 · 批量管理</span>
+            <div class="site-brand">
+                <span class="site-logo-badge" aria-hidden="true">
+                    <img src="/static/assets/logo.png" alt="" class="site-logo-image">
+                </span>
+                <div class="site-brand-copy">
+                    <div class="site-brand-title">
+                        <span class="font-bold text-xl tracking-tight text-gray-800">Microsoft<span class="text-sky-700">-Email-Manager</span></span>
+                        <span class="hidden md:inline-block text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">v2.0 · 批量管理</span>
+                    </div>
+                </div>
             </div>
             <div class="flex items-center gap-4 md:gap-6 text-sm font-medium">
                 <a href="#features" class="text-gray-600 hover:text-sky-700 transition hidden sm:block">特性</a>
                 <a href="#screenshots" class="text-gray-600 hover:text-sky-700 transition hidden sm:block">界面预览</a>
                 <a href="#deploy" class="text-gray-600 hover:text-sky-700 transition hidden sm:block">部署指南</a>
                 <a href="#faq" class="text-gray-600 hover:text-sky-700 transition hidden sm:block">常见问题</a>
-                <a href="https://github.com/Maishan-Inc/OutlookManager" target="_blank" class="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-1.5 rounded-full text-sm hover:bg-gray-800 transition shadow-sm">
+                <a href="https://github.com/Maishan-Inc/Microsoft-Email-Manager" target="_blank" class="flex items-center gap-1.5 bg-gray-900 text-white px-4 py-1.5 rounded-full text-sm hover:bg-gray-800 transition shadow-sm">
                     <i class="fab fa-github"></i> <span>GitHub</span>
                 </a>
             </div>
@@ -181,7 +239,7 @@
                     <a href="#deploy" class="bg-white text-sky-800 font-semibold px-6 py-3 rounded-xl shadow-lg hover:bg-gray-100 transition flex items-center gap-2">
                         <i class="fas fa-cloud-arrow-down"></i> 快速部署
                     </a>
-                    <a href="https://github.com/Maishan-Inc/OutlookManager" target="_blank" class="bg-transparent border border-white/70 text-white font-medium px-6 py-3 rounded-xl hover:bg-white/10 transition flex items-center gap-2">
+                    <a href="https://github.com/Maishan-Inc/Microsoft-Email-Manager" target="_blank" class="bg-transparent border border-white/70 text-white font-medium px-6 py-3 rounded-xl hover:bg-white/10 transition flex items-center gap-2">
                         <i class="fab fa-github"></i> GitHub 仓库
                     </a>
                     <a href="#screenshots" class="bg-transparent text-white/90 border border-white/30 px-6 py-3 rounded-xl hover:bg-white/5 transition flex items-center gap-2">
@@ -301,7 +359,7 @@
                     <p class="text-gray-600 mb-4 text-sm">适合自托管服务器，数据持久化，开箱即用</p>
                     <div class="relative">
                         <div class="code-block text-sm" id="dockerCommandBlock">
-                            git clone https://github.com/Maishan-Inc/OutlookManager.git Microsoft-Email-Manager<br>
+                            git clone https://github.com/Maishan-Inc/Microsoft-Email-Manager.git Microsoft-Email-Manager<br>
                             cd Microsoft-Email-Manager<br>
                             docker-compose up -d
                         </div>
@@ -315,18 +373,24 @@
                 <div class="deploy-card border border-gray-200 p-6 lg:p-7">
                     <h3 class="text-2xl font-bold flex items-center gap-2 mb-4"><i class="fas fa-cloud-upload-alt text-sky-600"></i> 云平台一键部署</h3>
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-                        <a href="https://railway.com/" target="_blank" class="flex flex-col items-center bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition border border-gray-200">
-                            <img src="/static/assets/icons/railway.svg" alt="Railway" class="platform-logo" loading="lazy">
+                        <a href="https://railway.com/" target="_blank" class="platform-option bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition border border-gray-200">
+                            <span class="platform-logo-shell">
+                                <img src="/static/assets/icons/railway.svg" alt="Railway" class="platform-logo" loading="lazy">
+                            </span>
                             <span class="font-medium mt-1">Railway</span>
                             <span class="text-xs text-gray-500">GitHub / 镜像部署</span>
                         </a>
-                        <a href="https://zeabur.com/" target="_blank" class="flex flex-col items-center bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition border border-gray-200">
-                            <img src="/static/assets/icons/zeabur.svg" alt="Zeabur" class="platform-logo" loading="lazy">
+                        <a href="https://zeabur.com/" target="_blank" class="platform-option bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition border border-gray-200">
+                            <span class="platform-logo-shell">
+                                <img src="/static/assets/icons/zeabur.svg" alt="Zeabur" class="platform-logo" loading="lazy">
+                            </span>
                             <span class="font-medium mt-1">Zeabur</span>
                             <span class="text-xs text-gray-500">存储挂载 / 环境变量</span>
                         </a>
-                        <a href="https://run.claw.cloud/" target="_blank" class="flex flex-col items-center bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition border border-gray-200">
-                            <i class="fas fa-cloud text-3xl text-cyan-600"></i>
+                        <a href="https://run.claw.cloud/" target="_blank" class="platform-option bg-gray-50 rounded-xl p-3 hover:bg-gray-100 transition border border-gray-200">
+                            <span class="platform-logo-shell">
+                                <img src="/static/assets/icons/clawcloud.svg" alt="ClawCloud Run" class="platform-logo" loading="lazy">
+                            </span>
                             <span class="font-medium mt-1">ClawCloud Run</span>
                             <span class="text-xs text-gray-500">App Launchpad</span>
                         </a>
@@ -353,8 +417,8 @@
             <h2 class="text-3xl font-bold">完全开源 · 自由扩展</h2>
             <p class="text-gray-300 max-w-xl mx-auto mt-3">遵循 CC BY-NC 4.0 协议，欢迎 Star、Fork 贡献代码，共建批量邮箱生态。</p>
             <div class="flex justify-center gap-5 mt-7">
-                <a href="https://github.com/Maishan-Inc/OutlookManager" target="_blank" class="bg-white text-gray-900 px-6 py-2.5 rounded-full font-semibold hover:bg-gray-200 transition inline-flex items-center gap-2"><i class="fab fa-github"></i> 仓库地址</a>
-                <a href="https://github.com/Maishan-Inc/OutlookManager/issues" target="_blank" class="border border-white/40 px-6 py-2.5 rounded-full hover:bg-white/10 transition"><i class="fas fa-comment-dots"></i> 反馈建议</a>
+                <a href="https://github.com/Maishan-Inc/Microsoft-Email-Manager" target="_blank" class="bg-white text-gray-900 px-6 py-2.5 rounded-full font-semibold hover:bg-gray-200 transition inline-flex items-center gap-2"><i class="fab fa-github"></i> 仓库地址</a>
+                <a href="https://github.com/Maishan-Inc/Microsoft-Email-Manager/issues" target="_blank" class="border border-white/40 px-6 py-2.5 rounded-full hover:bg-white/10 transition"><i class="fas fa-comment-dots"></i> 反馈建议</a>
             </div>
             <div class="mt-6 text-sm text-gray-400">⭐ 如果觉得有用，给项目点个 Star 支持我们</div>
         </div>
@@ -429,13 +493,13 @@
     <footer class="bg-white border-t border-gray-200 py-10">
         <div class="container-custom mx-auto flex flex-col md:flex-row justify-between items-center gap-4 text-sm text-gray-500">
             <div class="flex flex-wrap gap-5">
-                <span>© 2025 Maishan Inc.</span>
-                <span>CC BY-NC 4.0 开源协议</span>
+                <span>© <span id="currentYearLabel">2026</span> Maishan Inc.</span>
+                <a href="https://creativecommons.org/licenses/by-nc/4.0/legalcode.zh-hans" target="_blank" rel="noopener noreferrer" class="hover:text-sky-600">CC BY-NC 4.0 开源协议</a>
                 <a href="https://www.maishanzero.com" target="_blank" class="hover:text-sky-600">官网</a>
                 <a href="mailto:support@maishanzero.com" class="hover:text-sky-600">support@maishanzero.com</a>
             </div>
             <div class="flex gap-4">
-                <a href="https://github.com/Maishan-Inc/OutlookManager/blob/main/README.md" target="_blank" class="hover:text-sky-600">完整文档</a>
+                <a href="https://github.com/Maishan-Inc/Microsoft-Email-Manager/blob/main/README.md" target="_blank" class="hover:text-sky-600">完整文档</a>
             </div>
         </div>
     </footer>
@@ -446,8 +510,13 @@
     </div>
 
     <script>
+        const currentYearLabel = document.getElementById('currentYearLabel');
+        if (currentYearLabel) {
+            currentYearLabel.textContent = String(new Date().getFullYear());
+        }
+
         window.copyCommand = function() {
-            const text = `git clone https://github.com/Maishan-Inc/OutlookManager.git Microsoft-Email-Manager\ncd Microsoft-Email-Manager\ndocker-compose up -d`;
+            const text = `git clone https://github.com/Maishan-Inc/Microsoft-Email-Manager.git Microsoft-Email-Manager\ncd Microsoft-Email-Manager\ndocker-compose up -d`;
             navigator.clipboard.writeText(text).then(() => {
                 const btn = document.querySelector('.copy-btn');
                 const originalHtml = btn.innerHTML;
