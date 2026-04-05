@@ -1957,6 +1957,7 @@
 
         #emailsPage .search-container {
             width: 56px;
+            height: 56px;
             min-height: 56px;
             margin: 0 auto 18px;
             padding: 8px;
@@ -1966,6 +1967,8 @@
             gap: 0;
             overflow: hidden;
             border-radius: 999px;
+            background: transparent;
+            box-shadow: none;
             transition: width 0.36s cubic-bezier(0.22, 1, 0.36, 1), padding 0.36s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease;
         }
 
@@ -4615,11 +4618,11 @@ example3@outlook.com----password3----refresh_token3----client_id3"></textarea>
             };
         }
 
-        function resolveSenderLogoUrl(emailAddress = '', fallbackUrl = '') {
+        function resolveSenderLogoUrl(emailAddress = '') {
             const normalizedEmail = String(emailAddress || '').trim().toLowerCase();
             const domain = normalizedEmail.includes('@') ? normalizedEmail.split('@').pop() : normalizedEmail;
             if (!domain) {
-                return fallbackUrl || '';
+                return '';
             }
 
             const matchedRule = DOMAIN_LOGO_RULES.find(rule => rule.keywords.some(keyword => domain.includes(keyword)));
@@ -4627,14 +4630,15 @@ example3@outlook.com----password3----refresh_token3----client_id3"></textarea>
             return `https://www.google.com/s2/favicons?sz=128&domain_url=${encodeURIComponent(`https://${logoDomain}`)}`;
         }
 
-        function renderSenderAvatar(initial, avatarUrl, className = 'email-avatar') {
+        function renderSenderAvatar(initial, avatarUrl, className = 'email-avatar', fallbackUrl = '') {
             const safeInitial = escapeHtml(initial || '?');
             const safeUrl = avatarUrl ? escapeHtml(avatarUrl) : '';
+            const safeFallbackUrl = fallbackUrl ? escapeHtml(fallbackUrl) : '';
             const hasAvatar = Boolean(avatarUrl);
             const fallbackClass = hasAvatar ? 'avatar-fallback hidden' : 'avatar-fallback';
             const avatarClassName = hasAvatar ? `${className} has-avatar` : className;
             const imageMarkup = hasAvatar
-                ? `<img src="${safeUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove(); const fallback = this.parentElement.querySelector('.avatar-fallback'); if (fallback) fallback.classList.remove('hidden');">`
+                ? `<img src="${safeUrl}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback-src="${safeFallbackUrl}" onerror="const fallbackUrl = this.getAttribute('data-fallback-src'); if (fallbackUrl && this.src !== fallbackUrl) { this.src = fallbackUrl; this.removeAttribute('data-fallback-src'); return; } this.remove(); const fallback = this.parentElement.querySelector('.avatar-fallback'); if (fallback) fallback.classList.remove('hidden');">`
                 : '';
 
             return `
@@ -6437,13 +6441,13 @@ Authorization: Bearer om_your_api_key
         function createEmailItem(email) {
             const unreadClass = email.is_read ? '' : 'unread';
             const sender = getSenderProfile(email.from_email);
-            const senderLogoUrl = resolveSenderLogoUrl(sender.email, email.sender_avatar_url);
+            const senderLogoUrl = resolveSenderLogoUrl(sender.email);
             const attachmentIcon = email.has_attachments ? '<span style="color: #8b5cf6;">📎</span>' : '';
             const readIcon = email.is_read ? '✉️' : '📩';
 
             return `
                 <div class="email-item ${unreadClass}" onclick="showEmailDetail('${email.message_id}')">
-                    ${renderSenderAvatar(email.sender_initial || sender.initial, senderLogoUrl, 'email-avatar')}
+                    ${renderSenderAvatar(email.sender_initial || sender.initial, senderLogoUrl, 'email-avatar', email.sender_avatar_url)}
                     <div class="email-content">
                         <div class="email-header">
                             <div class="email-subject">${escapeHtml(email.subject || '(无主题)')}</div>
@@ -6464,12 +6468,12 @@ Authorization: Bearer om_your_api_key
             try {
                 const data = await apiRequest('/emails/' + currentAccount + '/' + messageId);
                 const sender = getSenderProfile(data.from_email);
-                const senderLogoUrl = resolveSenderLogoUrl(sender.email, data.sender_avatar_url);
+                const senderLogoUrl = resolveSenderLogoUrl(sender.email);
 
                 document.getElementById('emailModalTitle').textContent = data.subject || '(无主题)';
                 document.getElementById('emailModalContent').innerHTML = `
                     <div class="email-detail-hero">
-                        ${renderSenderAvatar(sender.initial, senderLogoUrl, 'email-detail-avatar')}
+                        ${renderSenderAvatar(sender.initial, senderLogoUrl, 'email-detail-avatar', data.sender_avatar_url)}
                         <div class="email-detail-hero-copy">
                             <div class="email-detail-hero-label">发件人头像</div>
                             <div class="email-detail-hero-name">${escapeHtml(sender.displayName)}</div>
