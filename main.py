@@ -77,6 +77,7 @@ TOKEN_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
 IMAP_OAUTH_SCOPE = "https://outlook.office.com/IMAP.AccessAsUser.All offline_access"
 GRAPH_OAUTH_SCOPE = "https://graph.microsoft.com/Mail.Read offline_access"
 GRAPH_API_BASE_URL = "https://graph.microsoft.com/v1.0"
+COMMON_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 DEFAULT_ACCOUNT_AUTH_METHOD = "imap"
 SUPPORTED_ACCOUNT_AUTH_METHODS = {"imap", "graph"}
 
@@ -2003,31 +2004,69 @@ def make_session_response(
 
 async def get_access_token(credentials: AccountCredentials) -> str:
     auth_method = normalize_account_auth_method(credentials.auth_method)
-    scope = GRAPH_OAUTH_SCOPE if auth_method == "graph" else IMAP_OAUTH_SCOPE
-    token_request_data = {
-        'client_id': credentials.client_id,
-        'grant_type': 'refresh_token',
-        'refresh_token': credentials.refresh_token,
-        'scope': scope
+    base_request_data = {
+        "client_id": credentials.client_id,
+        "grant_type": "refresh_token",
+        "refresh_token": credentials.refresh_token,
     }
+
+    if auth_method == "graph":
+        token_urls = [TOKEN_URL, COMMON_TOKEN_URL]
+        request_attempts = [
+            {**base_request_data, "scope": GRAPH_OAUTH_SCOPE},
+            {**base_request_data, "scope": "offline_access openid profile email https://graph.microsoft.com/Mail.Read"},
+            {**base_request_data, "scope": "offline_access https://graph.microsoft.com/.default"},
+            dict(base_request_data),
+        ]
+    else:
+        token_urls = [TOKEN_URL]
+        request_attempts = [
+            {**base_request_data, "scope": IMAP_OAUTH_SCOPE},
+            dict(base_request_data),
+        ]
 
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            response = await client.post(TOKEN_URL, data=token_request_data)
-            response.raise_for_status()
+            last_error_response: httpx.Response | None = None
 
-            token_data = response.json()
-            access_token = token_data.get('access_token')
+            for token_url in token_urls:
+                for token_request_data in request_attempts:
+                    response = await client.post(token_url, data=token_request_data)
+                    if response.is_success:
+                        token_data = response.json()
+                        access_token = token_data.get("access_token")
+                        if not access_token:
+                            logger.error(f"No access token in response for {credentials.email}")
+                            raise HTTPException(
+                                status_code=401,
+                                detail="Failed to obtain access token from response",
+                            )
 
-            if not access_token:
-                logger.error(f"No access token in response for {credentials.email}")
-                raise HTTPException(
-                    status_code=401,
-                    detail="Failed to obtain access token from response"
-                )
+                        logger.info(
+                            "Successfully obtained %s access token for %s via %s",
+                            auth_method,
+                            credentials.email,
+                            token_url,
+                        )
+                        return access_token
 
-            logger.info(f"Successfully obtained {auth_method} access token for {credentials.email}")
-            return access_token
+                    last_error_response = response
+                    detail = extract_graph_error_detail(response)
+                    logger.warning(
+                        "Token attempt failed for %s via %s: HTTP %s %s",
+                        credentials.email,
+                        token_url,
+                        response.status_code,
+                        detail,
+                    )
+
+            if last_error_response is not None:
+                detail = extract_graph_error_detail(last_error_response)
+                if last_error_response.status_code == 400:
+                    raise HTTPException(status_code=401, detail=detail or "Invalid refresh token or client credentials")
+                raise HTTPException(status_code=401, detail=detail or "Authentication failed")
+
+            raise HTTPException(status_code=401, detail="Authentication failed")
 
     except httpx.HTTPStatusError as e:
         logger.error(f"HTTP {e.response.status_code} error getting access token for {credentials.email}: {e}")

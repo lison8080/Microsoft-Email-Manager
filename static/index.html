@@ -2577,6 +2577,7 @@
             align-items: center;
             gap: 8px;
             flex-wrap: wrap;
+            position: relative;
         }
 
         .email-account-switcher {
@@ -2601,6 +2602,43 @@
         .email-account-copy-btn {
             border: none;
             cursor: pointer;
+        }
+
+        .email-account-menu {
+            position: relative;
+        }
+
+        .email-account-menu-btn {
+            min-height: 42px;
+        }
+
+        .email-account-menu-panel {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            min-width: 180px;
+            padding: 8px;
+            border-radius: 16px;
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 18px 40px rgba(15, 23, 42, 0.16);
+            z-index: 40;
+        }
+
+        .email-account-menu-item {
+            width: 100%;
+            min-height: 40px;
+            border: none;
+            border-radius: 12px;
+            background: transparent;
+            text-align: left;
+            padding: 0 12px;
+            cursor: pointer;
+            color: #1e293b;
+        }
+
+        .email-account-menu-item:hover {
+            background: rgba(59, 130, 246, 0.08);
         }
 
         .pagination {
@@ -4812,12 +4850,21 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
                             <div class="email-account-header">
                                 <h3 class="font-semibold">当前账户</h3>
                                 <div class="email-account-switcher">
-                                    <label class="email-account-switcher-label" for="currentAccountSelect">当前账户 / 快速切换 / 复制</label>
+                                    <label class="email-account-switcher-label" for="currentAccountSelect">当前账户 / 快速切换 / 复制 / 快捷绑定</label>
                                     <div class="email-account-toolbar">
                                         <select id="currentAccountSelect" class="form-input email-account-select" onchange="switchCurrentAccount(this.value)">
                                             <option value="">请选择账户</option>
                                         </select>
                                         <button type="button" class="copy-icon email-account-copy-btn" onclick="copyEmailAddress(document.getElementById('currentAccountSelect').value)" title="复制当前账户"><span></span></button>
+                                        <div class="email-account-menu">
+                                            <button type="button" id="accountBindMenuBtn" class="btn btn-secondary btn-sm email-account-menu-btn" onclick="toggleAccountBindMenu()">
+                                                <span></span>
+                                                快捷绑定
+                                            </button>
+                                            <div id="accountBindMenuPanel" class="email-account-menu-panel hidden">
+                                                <button type="button" class="email-account-menu-item" onclick="openCurrentAccountBinding()">快捷绑定当前邮箱</button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                                 <span id="currentAccountEmail" class="hidden"></span>
@@ -5139,6 +5186,7 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
         let currentEditCategoryKey = '';
         let currentEditTagDetails = [];
         let currentPublicShareEmail = null;
+        let accountBindMenuOpen = false;
         let currentEmailTagKeys = [];
         let currentEmailMessageId = null;
 
@@ -5710,6 +5758,7 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             setButtonIcon(document.querySelector('#emailsPage .btn-secondary.btn-sm[onclick="backToAccounts()"]'), 'arrow-left');
             setButtonIcon(document.querySelector('#emailsPage .btn-secondary.btn-sm[onclick="clearFilters()"]'), 'clear');
             setButtonIcon(document.querySelector('.email-account-copy-btn'), 'copy');
+            setButtonIcon(document.getElementById('accountBindMenuBtn'), 'tags');
             updateAutoRefreshButton();
 
             const searchIcon = document.querySelector('#emailsPage .search-icon');
@@ -7494,6 +7543,7 @@ Authorization: Bearer om_your_api_key
 
         function switchCurrentAccount(emailId) {
             if (!emailId || emailId === currentAccount) return;
+            closeAccountBindMenu();
             currentAccount = emailId;
             currentEmailFolder = 'all';
             currentEmailPage = 1;
@@ -7516,6 +7566,7 @@ Authorization: Bearer om_your_api_key
         }
 
         function backToAccounts() {
+            closeAccountBindMenu();
             currentAccount = null;
             navigateAdmin('/accounts');
             syncAutoRefreshTimer();
@@ -7718,6 +7769,27 @@ Authorization: Bearer om_your_api_key
             return `<div class="account-tags ${extraClass}">${tags.map(tag => `<span class="account-tag">${escapeHtml(getTagLabel(tag))}</span>`).join('')}</div>`;
         }
 
+        function toggleAccountBindMenu(forceOpen = null) {
+            const panel = document.getElementById('accountBindMenuPanel');
+            if (!panel) return;
+            accountBindMenuOpen = typeof forceOpen === 'boolean' ? forceOpen : !accountBindMenuOpen;
+            panel.classList.toggle('hidden', !accountBindMenuOpen);
+        }
+
+        function closeAccountBindMenu() {
+            toggleAccountBindMenu(false);
+        }
+
+        function openCurrentAccountBinding() {
+            if (!currentAccount) {
+                showNotification('请先选择当前邮箱账户', 'warning');
+                closeAccountBindMenu();
+                return;
+            }
+            closeAccountBindMenu();
+            editAccountTags(currentAccount);
+        }
+
         function buildEmailQuickTagsSection(tagDetails = []) {
             const options = mergeTagOptions(tagDetails);
             if (!options.length) {
@@ -7852,7 +7924,6 @@ Authorization: Bearer om_your_api_key
                             <strong>${escapeHtml(data.message_id)}</strong>
                         </div>
                     </div>
-                    <div id="emailQuickTagsWrap">${buildEmailQuickTagsSection(data.tag_details || [])}</div>
                     ${renderEmailContent(data)}
                 `;
 
@@ -8465,6 +8536,10 @@ Authorization: Bearer om_your_api_key
         });
 
         document.addEventListener('click', function(e) {
+            const accountMenu = document.querySelector('.email-account-menu');
+            if (accountMenu && !accountMenu.contains(e.target)) {
+                closeAccountBindMenu();
+            }
             const searchShell = document.getElementById('emailSearchShell');
             const searchInput = document.getElementById('mailSearchInput');
             if (!searchShell || !searchInput || window.innerWidth <= 768) return;
