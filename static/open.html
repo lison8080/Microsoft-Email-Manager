@@ -36,6 +36,13 @@
             min-height: 100vh;
         }
 
+        body.unavailable-mode .page-shell {
+            min-height: 100vh;
+            display: grid;
+            place-items: center;
+            padding-block: 24px;
+        }
+
         button,
         input,
         select {
@@ -88,6 +95,41 @@
             place-items: center;
             font-weight: 700;
             letter-spacing: 0.08em;
+        }
+
+        .brand-logo {
+            position: relative;
+            width: 92px;
+            height: 92px;
+            border-radius: 28px;
+            display: grid;
+            place-items: center;
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid rgba(255, 255, 255, 0.88);
+            box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+            overflow: hidden;
+        }
+
+        .brand-logo-image {
+            width: 64px;
+            height: 64px;
+            object-fit: contain;
+            display: block;
+        }
+
+        .brand-logo-mark {
+            position: absolute;
+            inset: 0;
+            display: grid;
+            place-items: center;
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            color: #0f766e;
+        }
+
+        .brand-logo:not(.is-placeholder) .brand-logo-mark {
+            display: none;
         }
 
         .hero h1 {
@@ -194,39 +236,221 @@
             margin-bottom: 18px;
         }
 
-        .control-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1.2fr) repeat(4, minmax(120px, 0.4fr));
-            gap: 12px;
-            align-items: end;
-        }
-
-        .control-grid-extended {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-            margin-top: 12px;
-        }
-
-        .field {
-            display: grid;
-            gap: 8px;
-        }
-
-        .field label {
-            font-size: 13px;
-            color: var(--muted);
-        }
-
         .input,
-        .select {
+        .select,
+        .filter-select,
+        .search-input {
             width: 100%;
             min-height: 46px;
             border-radius: 14px;
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.92);
-            padding: 0 14px;
             color: var(--text);
+            border: 1px solid rgba(148, 163, 184, 0.22);
+            background: rgba(255, 255, 255, 0.95);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+        }
+
+        .input,
+        .select,
+        .filter-select {
+            padding: 0 14px;
+        }
+
+        .input:focus,
+        .select:focus,
+        .filter-select:focus,
+        .search-input:focus {
+            outline: none;
+            border-color: rgba(37, 99, 235, 0.4);
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+        }
+
+        .search-container,
+        .filter-container {
+            border-radius: 20px;
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            background: rgba(245, 247, 251, 0.78);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        }
+
+        .search-container {
+            width: 56px;
+            min-height: 56px;
+            margin: 0 auto 18px;
+            padding: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0;
+            overflow: hidden;
+            border-radius: 999px;
+            transition: width 0.36s cubic-bezier(0.22, 1, 0.36, 1), padding 0.36s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s ease, border-color 0.28s ease;
+        }
+
+        .search-container.is-expanded {
+            width: min(100%, 720px);
+            padding: 8px 16px 8px 8px;
+            justify-content: flex-start;
+            gap: 12px;
+            box-shadow: 0 18px 34px rgba(15, 23, 42, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.72);
+        }
+
+        .search-icon {
+            width: 40px;
+            height: 40px;
+            padding: 0;
+            border: none;
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            align-self: center;
+            background: rgba(15, 118, 110, 0.1);
+            color: var(--primary-strong);
+            cursor: pointer;
+            flex-shrink: 0;
+            box-shadow: none;
+            line-height: 1;
+            transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s ease, color 0.2s ease;
+        }
+
+        .search-icon svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            stroke-width: 2;
+            fill: none;
+        }
+
+        .email-search-input-wrap {
+            max-width: 0;
+            opacity: 0;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            align-self: center;
+            min-height: 40px;
+            transform: translateX(18px);
+            transition: max-width 0.36s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.18s ease, transform 0.24s ease;
+        }
+
+        .search-container.is-expanded .email-search-input-wrap {
+            max-width: 100%;
+            flex: 1;
+            opacity: 1;
+            padding-right: 52px;
+            transform: translateX(0);
+            transition-delay: 0.12s, 0.12s, 0.12s;
+        }
+
+        .search-input {
+            height: 40px;
+            border: none;
+            background: transparent;
+            box-shadow: none;
+            padding: 0;
+            min-width: 0;
+            text-align: center;
+        }
+
+        .search-input:focus {
+            box-shadow: none;
+        }
+
+        .search-container .search-input::placeholder {
+            color: transparent;
+            transition: color 0.18s ease;
+        }
+
+        .search-container.is-expanded .search-input::placeholder {
+            color: #94a3b8;
+        }
+
+        .filter-container {
+            padding: 18px;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: flex-end;
+            gap: 14px;
+            margin-bottom: 20px;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            min-width: 168px;
+            flex: 1 1 168px;
+        }
+
+        .filter-label {
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--muted);
+        }
+
+        .filter-group-range {
+            flex: 0 0 0;
+            min-width: 0;
+            max-width: 0;
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            transform: translateY(-10px);
+            transition: flex-basis 0.34s cubic-bezier(0.22, 1, 0.36, 1), max-width 0.34s cubic-bezier(0.22, 1, 0.36, 1), max-height 0.34s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease, transform 0.26s ease;
+        }
+
+        .filter-group-range.is-active {
+            flex: 1.4 1 320px;
+            max-width: 420px;
+            max-height: 120px;
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .date-range-inputs {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+            gap: 10px;
+            align-items: center;
+        }
+
+        .date-range-separator {
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .filter-actions {
+            width: 152px;
+            min-width: 152px;
+            flex: 0 0 152px;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            margin-inline: auto;
+        }
+
+        .filter-actions .btn {
+            width: 100%;
+        }
+
+        select.filter-select {
+            appearance: none;
+            background-image:
+                linear-gradient(45deg, transparent 50%, #64748b 50%),
+                linear-gradient(135deg, #64748b 50%, transparent 50%);
+            background-position:
+                calc(100% - 18px) calc(50% - 3px),
+                calc(100% - 12px) calc(50% - 3px);
+            background-size: 6px 6px, 6px 6px;
+            background-repeat: no-repeat;
+            padding-right: 38px;
+        }
+
+        .filter-date-input {
+            padding-right: 14px;
         }
 
         .email-list {
@@ -317,6 +541,19 @@
         .empty-card {
             max-width: 520px;
             margin: 72px auto 0;
+        }
+
+        .unavailable-card {
+            width: min(82vw, 520px);
+            aspect-ratio: 1 / 1;
+            margin: 0;
+            padding: 40px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 14px;
+            text-align: center;
         }
 
         .gate-card h2,
@@ -502,9 +739,7 @@
         @media (max-width: 980px) {
             .hero,
             .stats-grid,
-            .detail-meta,
-            .control-grid,
-            .control-grid-extended {
+            .detail-meta {
                 grid-template-columns: 1fr;
             }
 
@@ -520,6 +755,52 @@
 
             .email-row {
                 flex-direction: column;
+            }
+
+            .search-container {
+                width: 100%;
+                min-height: 52px;
+                margin-inline: 0;
+                padding: 8px 14px;
+            }
+
+            .search-container,
+            .search-container.is-expanded {
+                width: 100%;
+            }
+
+            .email-search-input-wrap {
+                max-width: 100%;
+                flex: 1;
+                opacity: 1;
+                transform: none;
+            }
+
+            .search-container .search-input::placeholder {
+                color: #94a3b8;
+            }
+
+            .filter-group,
+            .filter-group-range,
+            .filter-actions {
+                width: 100%;
+                min-width: 0;
+                flex-basis: 100%;
+            }
+
+            .date-range-inputs {
+                grid-template-columns: 1fr;
+            }
+
+            .date-range-separator {
+                display: none;
+            }
+
+            .unavailable-card {
+                width: min(100%, 420px);
+                aspect-ratio: auto;
+                min-height: 420px;
+                padding: 32px 24px;
             }
         }
     </style>
@@ -537,8 +818,11 @@
             </form>
         </div>
 
-        <div id="unavailableView" class="empty-card hidden">
-            <div class="hero-mark" style="margin: 0 auto 16px;">OM</div>
+        <div id="unavailableView" class="empty-card unavailable-card hidden">
+            <div class="brand-logo is-placeholder" aria-hidden="true">
+                <img class="brand-logo-image" src="/static/assets/logo.png" alt="OutlookManager logo" onload="this.parentElement.classList.remove('is-placeholder')" onerror="this.style.display='none'; this.parentElement.classList.add('is-placeholder')">
+                <span class="brand-logo-mark">OM</span>
+            </div>
             <h2>公开页面不可用</h2>
             <p id="unavailableMessage" class="gate-note">这个公开链接当前未开放、已过期，或已被管理员关闭。</p>
         </div>
@@ -589,30 +873,37 @@
             </section>
 
             <section class="card">
-                <div class="control-grid">
-                    <div class="field">
-                        <label for="mailSearchInput">搜索</label>
-                        <input id="mailSearchInput" class="input" type="text" placeholder="搜索邮件主题、发件人" oninput="applyFilters()">
+                <div class="search-container email-search-shell" id="emailSearchShell">
+                    <button type="button" class="search-icon email-search-toggle" id="emailSearchToggle" onclick="toggleEmailSearch(true)" aria-label="展开搜索">
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                            <circle cx="11" cy="11" r="7"></circle>
+                            <path d="m20 20-3.5-3.5"></path>
+                        </svg>
+                    </button>
+                    <div class="email-search-input-wrap">
+                        <input id="mailSearchInput" class="search-input" type="text" placeholder="搜索邮件主题、发件人" oninput="applyFilters()" onfocus="toggleEmailSearch(true)" onblur="handleEmailSearchBlur()">
                     </div>
-                    <div class="field">
-                        <label for="folderFilter">文件夹</label>
-                        <select id="folderFilter" class="select" onchange="applyFilters()">
+                </div>
+                <div class="filter-container">
+                    <div class="filter-group">
+                        <label class="filter-label" for="folderFilter">文件夹</label>
+                        <select id="folderFilter" class="filter-select" onchange="applyFilters()">
                             <option value="all">全部邮件</option>
                             <option value="inbox">收件箱</option>
                             <option value="junk">垃圾邮件</option>
                         </select>
                     </div>
-                    <div class="field">
-                        <label for="statusFilter">状态</label>
-                        <select id="statusFilter" class="select" onchange="applyFilters()">
+                    <div class="filter-group">
+                        <label class="filter-label" for="statusFilter">状态</label>
+                        <select id="statusFilter" class="filter-select" onchange="applyFilters()">
                             <option value="all">全部状态</option>
                             <option value="unread">未读</option>
                             <option value="read">已读</option>
                         </select>
                     </div>
-                    <div class="field">
-                        <label for="timeFilter">时间</label>
-                        <select id="timeFilter" class="select" onchange="toggleCustomDateRange(); applyFilters()">
+                    <div class="filter-group">
+                        <label class="filter-label" for="timeFilter">时间</label>
+                        <select id="timeFilter" class="filter-select" onchange="toggleCustomDateRange(); applyFilters()">
                             <option value="all">全部时间</option>
                             <option value="today">今天</option>
                             <option value="3days">近 3 天</option>
@@ -623,27 +914,25 @@
                             <option value="custom">自定义</option>
                         </select>
                     </div>
-                    <div class="field">
-                        <label for="attachmentFilter">附件</label>
-                        <select id="attachmentFilter" class="select" onchange="applyFilters()">
+                    <div class="filter-group">
+                        <label class="filter-label" for="attachmentFilter">附件</label>
+                        <select id="attachmentFilter" class="filter-select" onchange="applyFilters()">
                             <option value="all">全部附件</option>
                             <option value="with">仅有附件</option>
                             <option value="without">无附件</option>
                         </select>
                     </div>
-                </div>
-                <div id="customDateRange" class="control-grid-extended hidden">
-                    <div class="field">
-                        <label for="dateFromFilter">开始日期</label>
-                        <input id="dateFromFilter" class="input" type="date" onchange="applyFilters()">
+                    <div id="customDateRange" class="filter-group filter-group-range">
+                        <label class="filter-label" for="dateFromFilter">自定义时间</label>
+                        <div class="date-range-inputs">
+                            <input id="dateFromFilter" class="filter-select filter-date-input" type="date" onchange="applyFilters()">
+                            <span class="date-range-separator">至</span>
+                            <input id="dateToFilter" class="filter-select filter-date-input" type="date" onchange="applyFilters()">
+                        </div>
                     </div>
-                    <div class="field">
-                        <label for="dateToFilter">结束日期</label>
-                        <input id="dateToFilter" class="input" type="date" onchange="applyFilters()">
+                    <div class="filter-actions">
+                        <button class="btn btn-secondary" type="button" onclick="clearFilters()">清除筛选</button>
                     </div>
-                </div>
-                <div class="btn-row" style="margin-top: 14px;">
-                    <button class="btn btn-secondary" type="button" onclick="clearFilters()">清除筛选</button>
                 </div>
             </section>
 
@@ -752,12 +1041,14 @@
         }
 
         function showPasswordGate() {
+            document.body.classList.remove('unavailable-mode');
             document.getElementById('passwordGate').classList.remove('hidden');
             document.getElementById('appView').classList.add('hidden');
             document.getElementById('unavailableView').classList.add('hidden');
         }
 
         function showUnavailable(message) {
+            document.body.classList.add('unavailable-mode');
             document.getElementById('unavailableMessage').textContent = message || '这个公开链接当前未开放、已过期，或已被管理员关闭。';
             document.getElementById('unavailableView').classList.remove('hidden');
             document.getElementById('passwordGate').classList.add('hidden');
@@ -765,6 +1056,7 @@
         }
 
         function showAppView() {
+            document.body.classList.remove('unavailable-mode');
             document.getElementById('appView').classList.remove('hidden');
             document.getElementById('passwordGate').classList.add('hidden');
             document.getElementById('unavailableView').classList.add('hidden');
@@ -796,6 +1088,8 @@
                     return;
                 }
                 showAppView();
+                syncEmailSearchState();
+                toggleCustomDateRange();
                 await loadEmails();
             } catch (error) {
                 showUnavailable(error.message);
@@ -846,6 +1140,8 @@
                 allEmails = data.emails || [];
                 updateEmailStats(allEmails);
                 document.getElementById('lastUpdateTime').textContent = new Date().toLocaleString();
+                syncEmailSearchState();
+                toggleCustomDateRange();
                 applyFilters();
             } catch (error) {
                 if (String(error.message || '').toLowerCase().includes('password')) {
@@ -876,8 +1172,46 @@
         }
 
         function toggleCustomDateRange() {
-            const timeFilter = document.getElementById('timeFilter').value;
-            document.getElementById('customDateRange').classList.toggle('hidden', timeFilter !== 'custom');
+            const timeFilter = document.getElementById('timeFilter');
+            const rangeWrap = document.getElementById('customDateRange');
+            if (!timeFilter || !rangeWrap) return;
+            rangeWrap.classList.toggle('is-active', timeFilter.value === 'custom');
+        }
+
+        function toggleEmailSearch(forceExpand = null) {
+            const searchShell = document.getElementById('emailSearchShell');
+            const searchInput = document.getElementById('mailSearchInput');
+            if (!searchShell || !searchInput) return;
+
+            if (window.innerWidth <= 768) {
+                searchShell.classList.add('is-expanded');
+                return;
+            }
+
+            const shouldExpand = typeof forceExpand === 'boolean'
+                ? forceExpand
+                : !searchShell.classList.contains('is-expanded');
+
+            searchShell.classList.toggle('is-expanded', shouldExpand);
+            if (shouldExpand) {
+                window.setTimeout(() => searchInput.focus(), 180);
+            }
+        }
+
+        function handleEmailSearchBlur() {
+            const searchShell = document.getElementById('emailSearchShell');
+            const searchInput = document.getElementById('mailSearchInput');
+            if (!searchShell || !searchInput || window.innerWidth <= 768) return;
+            if (!searchInput.value.trim()) {
+                searchShell.classList.remove('is-expanded');
+            }
+        }
+
+        function syncEmailSearchState() {
+            const searchShell = document.getElementById('emailSearchShell');
+            const searchInput = document.getElementById('mailSearchInput');
+            if (!searchShell || !searchInput) return;
+            searchShell.classList.toggle('is-expanded', window.innerWidth <= 768 || !!searchInput.value.trim());
         }
 
         function applyFilters() {
@@ -956,6 +1290,7 @@
             document.getElementById('dateFromFilter').value = '';
             document.getElementById('dateToFilter').value = '';
             toggleCustomDateRange();
+            syncEmailSearchState();
             filteredEmails = [...allEmails];
             renderFilteredEmails();
         }
@@ -1124,6 +1459,7 @@
                 closeEmailModal();
             }
         });
+        window.addEventListener('resize', syncEmailSearchState);
 
         initializePage();
     </script>

@@ -1514,7 +1514,9 @@
             flex-direction: column;
             justify-content: center;
             gap: 8px;
-            transition: opacity 0.18s ease, transform 0.18s ease;
+            max-width: 180px;
+            overflow: hidden;
+            transition: max-width 0.24s ease, opacity 0.18s ease, transform 0.18s ease;
         }
 
         .sidebar-title-stack h1 {
@@ -1666,13 +1668,19 @@
         .sidebar-utility-label {
             white-space: nowrap;
             display: inline;
+            max-width: 120px;
+            overflow: hidden;
+            transition: max-width 0.22s ease, opacity 0.16s ease, transform 0.16s ease;
         }
 
         .nav-item-text {
+            display: inline-block;
             min-width: 0;
+            max-width: 160px;
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
+            transition: max-width 0.22s ease, opacity 0.16s ease, transform 0.16s ease;
         }
 
         .sidebar-toggle {
@@ -1681,24 +1689,25 @@
         }
 
         .sidebar.is-collapsed {
-            width: 96px;
+            width: 120px;
         }
 
         .sidebar.is-collapsed .sidebar-header {
-            padding: 22px 12px 16px;
+            padding: 24px 20px 18px;
         }
 
         .sidebar.is-collapsed .sidebar-brand {
-            flex-direction: column;
-            align-items: center;
+            flex-direction: row;
+            align-items: flex-start;
+            justify-content: space-between;
             gap: 14px;
         }
 
         .sidebar.is-collapsed .sidebar-brand-main {
-            width: auto;
-            flex-direction: column;
-            justify-content: center;
-            gap: 12px;
+            width: 100%;
+            flex-direction: row;
+            justify-content: flex-start;
+            gap: 0;
             align-items: center;
         }
 
@@ -1711,9 +1720,7 @@
         .sidebar.is-collapsed .sidebar-title-stack,
         .sidebar.is-collapsed .nav-item-text,
         .sidebar.is-collapsed .sidebar-utility-label {
-            display: none;
             opacity: 0;
-            width: 0;
             max-width: 0;
             overflow: hidden;
             pointer-events: none;
@@ -1727,28 +1734,27 @@
         .sidebar.is-collapsed .nav-item,
         .sidebar.is-collapsed .sidebar-utility,
         .sidebar.is-collapsed .sidebar-toggle {
-            justify-content: center;
-            padding-inline: 0;
+            justify-content: flex-start;
         }
 
         .sidebar.is-collapsed .nav-item {
-            width: 58px;
-            min-width: 58px;
+            width: 100%;
+            min-width: 0;
             height: 58px;
-            margin: 0 auto;
+            margin: 0;
         }
 
         .sidebar.is-collapsed .sidebar-utility,
         .sidebar.is-collapsed .sidebar-toggle {
-            width: 46px;
-            min-width: 46px;
+            width: 100%;
+            min-width: 0;
             height: 46px;
             min-height: 46px;
-            margin: 0 auto;
+            margin: 0;
         }
 
         .sidebar.is-collapsed .sidebar-footer {
-            padding-inline: 14px;
+            padding: 16px 14px 18px;
         }
 
         .sidebar.is-collapsed #sidebarToggle .ui-icon svg {
@@ -2723,6 +2729,36 @@
                 top: 0;
             }
 
+            .sidebar-header,
+            .sidebar.is-collapsed .sidebar-header {
+                padding: 18px 16px 14px;
+            }
+
+            .sidebar-brand,
+            .sidebar.is-collapsed .sidebar-brand {
+                justify-content: center;
+                align-items: center;
+            }
+
+            .sidebar-brand-main,
+            .sidebar.is-collapsed .sidebar-brand-main {
+                width: 100%;
+                justify-content: center;
+                align-items: center;
+                gap: 12px;
+                flex: 0 1 auto;
+            }
+
+            .sidebar-title-stack,
+            .sidebar.is-collapsed .sidebar-title-stack {
+                align-items: center;
+                text-align: center;
+            }
+
+            .sidebar-title-stack h1 {
+                text-align: center;
+            }
+
             .sidebar-nav {
                 flex-direction: row;
                 padding: 14px;
@@ -2763,6 +2799,17 @@
                 display: inline-flex;
             }
 
+            #mobileLogoutBtn {
+                color: #ef4444;
+                background: rgba(239, 68, 68, 0.1);
+            }
+
+            #mobileLogoutBtn:hover,
+            #mobileLogoutBtn.active {
+                color: #dc2626;
+                background: rgba(239, 68, 68, 0.16);
+            }
+
             .sidebar.is-collapsed .sidebar-title-stack,
             .sidebar.is-collapsed .nav-item-text,
             .sidebar.is-collapsed .sidebar-utility-label {
@@ -2776,12 +2823,15 @@
 
             .sidebar.is-collapsed .sidebar-brand {
                 flex-direction: row;
-                align-items: flex-start;
+                justify-content: center;
+                align-items: center;
             }
 
             .sidebar.is-collapsed .sidebar-brand-main {
-                width: auto;
+                width: 100%;
                 flex-direction: row;
+                justify-content: center;
+                align-items: center;
             }
 
             .sidebar.is-collapsed .nav-item,
@@ -5379,7 +5429,7 @@ example3@outlook.com----password3----refresh_token_here_3----client_id_here_3`;
             const accountsStats = document.getElementById('accountsStats');
             const accountsPagination = document.getElementById('accountsPagination');
             
-            accountsList.innerHTML = '<div class="loading">正在加载账户列表...</div>';
+            accountsList.innerHTML = '<div class="loading"><div class="loading-spinner"></div>正在加载账户列表...</div>';
             accountsStats.style.display = 'none';
             accountsPagination.style.display = 'none';
 
