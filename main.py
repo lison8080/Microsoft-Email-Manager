@@ -1282,7 +1282,9 @@ async def get_all_accounts(
 # OAuth2令牌管理模块
 # ============================================================================
 
-auth_lock = threading.Lock()
+# Auth/file helpers can call each other while operating on the same on-disk state.
+# Use a re-entrant lock so nested reads/writes do not deadlock the request thread.
+auth_lock = threading.RLock()
 
 
 def _read_json_file(path: Path, default: dict[str, Any]) -> dict[str, Any]:
