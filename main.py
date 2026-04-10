@@ -365,6 +365,9 @@ class SiteSettingsPayload(BaseModel):
     admin_login_path: str = Field(default=DEFAULT_ADMIN_LOGIN_PATH, min_length=2, max_length=120)
     share_domain_enabled: bool = Field(default=False)
     share_domain: Optional[str] = Field(default=None, max_length=255)
+    share_domain_turnstile_enabled: bool = Field(default=False)
+    share_domain_turnstile_site_key: Optional[str] = Field(default=None, max_length=512)
+    share_domain_turnstile_secret_key: Optional[str] = Field(default=None, max_length=512)
     turnstile_site_key: Optional[str] = Field(default=None, max_length=512)
     turnstile_secret_key: Optional[str] = Field(default=None, max_length=512)
     turnstile_enabled_for_admin_login: bool = Field(default=False)
@@ -1508,6 +1511,9 @@ def get_default_site_settings() -> dict[str, Any]:
         "admin_login_path": DEFAULT_ADMIN_LOGIN_PATH,
         "share_domain_enabled": False,
         "share_domain": "",
+        "share_domain_turnstile_enabled": False,
+        "share_domain_turnstile_site_key": "",
+        "share_domain_turnstile_secret_key": "",
         "turnstile_site_key": "",
         "turnstile_secret_key": "",
         "turnstile_enabled_for_admin_login": False,
@@ -1594,6 +1600,59 @@ def build_turnstile_client_config(settings: Optional[dict[str, Any]] = None) -> 
     }
 
 
+def build_public_turnstile_client_config(settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    source = settings or load_site_settings()
+    share_domain_enabled = bool(source.get("share_domain_enabled")) and bool(source.get("share_domain"))
+    share_site_key = normalize_turnstile_value(source.get("share_domain_turnstile_site_key"))
+    share_secret_key = normalize_turnstile_value(source.get("share_domain_turnstile_secret_key"))
+    share_configured = bool(share_site_key) and bool(share_secret_key)
+    share_independent_enabled = share_domain_enabled and bool(source.get("share_domain_turnstile_enabled", False))
+    share_independent_active = share_independent_enabled and share_configured
+
+    if share_independent_active:
+        return {
+            "enabled": True,
+            "site_key": share_site_key,
+            "admin_login_enabled": False,
+            "public_access_enabled": True,
+            "mode": "share_domain_independent",
+        }
+
+    fallback = build_turnstile_client_config(source)
+    return {
+        **fallback,
+        "mode": "shared_default",
+    }
+
+
+def resolve_turnstile_runtime_config(request: Request, audience: str, settings: Optional[dict[str, Any]] = None) -> dict[str, Any]:
+    source = settings or load_site_settings()
+    if audience == "admin_login":
+        config = build_turnstile_client_config(source)
+        return {
+            "enabled": bool(config.get("admin_login_enabled")),
+            "secret_key": normalize_turnstile_value(source.get("turnstile_secret_key")),
+            "site_key": normalize_turnstile_value(source.get("turnstile_site_key")),
+            "mode": "admin_default",
+        }
+
+    public_config = build_public_turnstile_client_config(source)
+    if public_config.get("mode") == "share_domain_independent":
+        return {
+            "enabled": bool(public_config.get("public_access_enabled")),
+            "secret_key": normalize_turnstile_value(source.get("share_domain_turnstile_secret_key")),
+            "site_key": normalize_turnstile_value(source.get("share_domain_turnstile_site_key")),
+            "mode": "share_domain_independent",
+        }
+
+    return {
+        "enabled": bool(public_config.get("public_access_enabled")),
+        "secret_key": normalize_turnstile_value(source.get("turnstile_secret_key")),
+        "site_key": normalize_turnstile_value(source.get("turnstile_site_key")),
+        "mode": "shared_default",
+    }
+
+
 def load_site_settings() -> dict[str, Any]:
     with auth_lock:
         data = _read_json_file(SITE_SETTINGS_FILE, get_default_site_settings())
@@ -1603,6 +1662,9 @@ def load_site_settings() -> dict[str, Any]:
             "home_intro": str(data.get("home_intro") or defaults["home_intro"]).strip()[:1200] or defaults["home_intro"],
             "share_domain_enabled": bool(data.get("share_domain_enabled", False)),
             "share_domain": "",
+            "share_domain_turnstile_enabled": bool(data.get("share_domain_turnstile_enabled", False)),
+            "share_domain_turnstile_site_key": normalize_turnstile_value(data.get("share_domain_turnstile_site_key")),
+            "share_domain_turnstile_secret_key": normalize_turnstile_value(data.get("share_domain_turnstile_secret_key")),
             "turnstile_site_key": normalize_turnstile_value(data.get("turnstile_site_key")),
             "turnstile_secret_key": normalize_turnstile_value(data.get("turnstile_secret_key")),
             "turnstile_enabled_for_admin_login": bool(data.get("turnstile_enabled_for_admin_login", False)),
@@ -1622,8 +1684,13 @@ def load_site_settings() -> dict[str, Any]:
 
         if not normalized["share_domain"]:
             normalized["share_domain_enabled"] = False
+            normalized["share_domain_turnstile_enabled"] = False
+        if not normalized["share_domain_turnstile_site_key"] or not normalized["share_domain_turnstile_secret_key"]:
+            normalized["share_domain_turnstile_enabled"] = False
         if not normalized["turnstile_site_key"] or not normalized["turnstile_secret_key"]:
             normalized["turnstile_enabled_for_admin_login"] = False
+            normalized["turnstile_enabled_for_public_access"] = False
+        if normalized["share_domain_turnstile_enabled"]:
             normalized["turnstile_enabled_for_public_access"] = False
 
         return normalized
@@ -1636,6 +1703,9 @@ def save_site_settings(settings: dict[str, Any]) -> dict[str, Any]:
         "admin_login_path": normalize_admin_login_path(settings.get("admin_login_path")),
         "share_domain_enabled": bool(settings.get("share_domain_enabled", False)),
         "share_domain": normalize_hostname(settings.get("share_domain")),
+        "share_domain_turnstile_enabled": bool(settings.get("share_domain_turnstile_enabled", False)),
+        "share_domain_turnstile_site_key": normalize_turnstile_value(settings.get("share_domain_turnstile_site_key")),
+        "share_domain_turnstile_secret_key": normalize_turnstile_value(settings.get("share_domain_turnstile_secret_key")),
         "turnstile_site_key": normalize_turnstile_value(settings.get("turnstile_site_key")),
         "turnstile_secret_key": normalize_turnstile_value(settings.get("turnstile_secret_key")),
         "turnstile_enabled_for_admin_login": bool(settings.get("turnstile_enabled_for_admin_login", False)),
@@ -1644,8 +1714,13 @@ def save_site_settings(settings: dict[str, Any]) -> dict[str, Any]:
     }
     if not payload["share_domain"]:
         payload["share_domain_enabled"] = False
+        payload["share_domain_turnstile_enabled"] = False
+    if not payload["share_domain_turnstile_site_key"] or not payload["share_domain_turnstile_secret_key"]:
+        payload["share_domain_turnstile_enabled"] = False
     if not payload["turnstile_site_key"] or not payload["turnstile_secret_key"]:
         payload["turnstile_enabled_for_admin_login"] = False
+        payload["turnstile_enabled_for_public_access"] = False
+    if payload["share_domain_turnstile_enabled"]:
         payload["turnstile_enabled_for_public_access"] = False
 
     with auth_lock:
@@ -1779,13 +1854,8 @@ def validate_browser_origin(request: Request) -> JSONResponse | None:
 
 async def enforce_turnstile(request: Request, token: str | None, audience: str) -> None:
     site_settings = load_site_settings()
-    turnstile_config = build_turnstile_client_config(site_settings)
-    audience_enabled = (
-        turnstile_config.get("admin_login_enabled")
-        if audience == "admin_login"
-        else turnstile_config.get("public_access_enabled")
-    )
-    if not audience_enabled:
+    runtime_config = resolve_turnstile_runtime_config(request, audience, site_settings)
+    if not runtime_config.get("enabled"):
         return
 
     token_value = str(token or "").strip()
@@ -1793,7 +1863,7 @@ async def enforce_turnstile(request: Request, token: str | None, audience: str) 
         raise HTTPException(status_code=400, detail="请先完成 Cloudflare Turnstile 验证")
 
     payload = {
-        "secret": site_settings.get("turnstile_secret_key", ""),
+        "secret": runtime_config.get("secret_key", ""),
         "response": token_value,
     }
     remote_ip = get_request_ip(request)
@@ -3663,7 +3733,7 @@ async def get_open_email_status(email_id: str, request: Request):
         "requires_password": bool(meta.get("password_hash")),
         "access_granted": not bool(meta.get("password_hash")) or bool(get_open_access_session(request, email_id)),
         "public_url": build_public_share_url(request, email_id),
-        "turnstile": build_turnstile_client_config(site_settings),
+        "turnstile": build_public_turnstile_client_config(site_settings),
     }
 
 

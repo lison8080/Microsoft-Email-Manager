@@ -4160,6 +4160,61 @@
             line-height: 1.7;
         }
 
+        .turnstile-disabled-note {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #94a3b8;
+            font-size: 12px;
+            line-height: 1.6;
+            margin-top: 8px;
+        }
+
+        .turnstile-disabled-note-badge {
+            width: 18px;
+            height: 18px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(148, 163, 184, 0.16);
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 700;
+            flex: 0 0 18px;
+        }
+
+        .turnstile-scope-row {
+            gap: 10px;
+        }
+
+        .turnstile-scope-row.is-disabled {
+            color: #94a3b8;
+        }
+
+        .turnstile-scope-lock {
+            min-width: 18px;
+            height: 18px;
+            padding: 0 6px;
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(148, 163, 184, 0.16);
+            color: #94a3b8;
+            font-size: 11px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .turnstile-recommendation-note.is-warning {
+            color: #b45309;
+        }
+
+        .turnstile-recommendation-note.is-neutral {
+            color: #64748b;
+        }
+
         .auth-actions {
             display: flex;
             gap: 12px;
@@ -6242,8 +6297,25 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label" for="siteSettingsShareDomain">分享页面域名</label>
-                                    <input type="text" id="siteSettingsShareDomain" class="form-input" placeholder="例如：share.example.com">
+                                    <input type="text" id="siteSettingsShareDomain" class="form-input" placeholder="例如：share.example.com" oninput="updatePublicTurnstileScopeAvailability()">
                                     <div class="public-share-help">只填写域名，支持端口，例如 <code>share.example.com</code> 或 <code>127.0.0.1:9000</code>。</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="public-share-inline">
+                                        <input type="checkbox" id="siteSettingsShareDomainTurnstileEnabled" onchange="toggleShareDomainTurnstileSettings()">
+                                        <span>为公开分享域名单独启用 Cloudflare Turnstile</span>
+                                    </label>
+                                    <div class="public-share-help">默认关闭。如果公开分享域名不是管理员后台同一个域名，建议开启并配置独立密钥；同域名时也可以继续共用管理员默认配置。</div>
+                                    <div id="siteSettingsShareDomainTurnstileHint" class="public-share-help turnstile-recommendation-note is-neutral">当前默认关闭。配置独立分享域名后，系统会根据域名是否一致给出建议。</div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="siteSettingsShareDomainTurnstileSiteKey">公开分享域名独立 Site Key</label>
+                                    <input type="text" id="siteSettingsShareDomainTurnstileSiteKey" class="form-input" placeholder="0x4AAAA...">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="siteSettingsShareDomainTurnstileSecretKey">公开分享域名独立 Secret Key</label>
+                                    <input type="password" id="siteSettingsShareDomainTurnstileSecretKey" class="form-input" placeholder="输入公开分享域名专用 Secret Key" autocomplete="off">
+                                    <div class="public-share-help">开启后，公开分享页面会优先使用这里的独立密钥，与管理员默认 Turnstile 配置完全分离。</div>
                                 </div>
                                 <div class="api-docs-auth-box">
                                     <p class="api-description" style="margin-bottom: 10px;">效果说明</p>
@@ -6274,10 +6346,15 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
                                             <input type="checkbox" id="siteSettingsTurnstileAdminEnabled">
                                             <span>管理员登录页启用验证</span>
                                         </label>
-                                        <label class="public-share-inline">
+                                        <label id="siteSettingsTurnstilePublicScopeRow" class="public-share-inline turnstile-scope-row">
                                             <input type="checkbox" id="siteSettingsTurnstilePublicEnabled">
                                             <span>公开页面密码验证启用</span>
+                                            <span id="siteSettingsTurnstilePublicLockedBadge" class="turnstile-scope-lock hidden">X</span>
                                         </label>
+                                    </div>
+                                    <div id="siteSettingsTurnstilePublicLockedHint" class="turnstile-disabled-note hidden">
+                                        <span class="turnstile-disabled-note-badge">X</span>
+                                        <span>受到其他独立密钥影响已被禁用</span>
                                     </div>
                                     <div class="public-share-help">公开页面只有在该邮箱已设置访问密码时，才会出现 Turnstile 验证框。</div>
                                 </div>
@@ -10425,6 +10502,78 @@ Authorization: Bearer om_your_api_key
             if (!enabled) {
                 input.value = '';
             }
+            toggleShareDomainTurnstileSettings();
+        }
+
+        function updatePublicTurnstileScopeAvailability() {
+            const shareDomainEnabled = !!document.getElementById('siteSettingsShareDomainEnabled')?.checked;
+            const shareDomain = document.getElementById('siteSettingsShareDomain')?.value.trim();
+            const independentEnabled = !!document.getElementById('siteSettingsShareDomainTurnstileEnabled')?.checked;
+            const publicCheckbox = document.getElementById('siteSettingsTurnstilePublicEnabled');
+            const lockHint = document.getElementById('siteSettingsTurnstilePublicLockedHint');
+            const lockBadge = document.getElementById('siteSettingsTurnstilePublicLockedBadge');
+            const publicScopeRow = document.getElementById('siteSettingsTurnstilePublicScopeRow');
+            const shareTurnstileHint = document.getElementById('siteSettingsShareDomainTurnstileHint');
+            const locked = shareDomainEnabled && !!shareDomain && independentEnabled;
+
+            if (publicCheckbox) {
+                publicCheckbox.disabled = locked;
+                if (locked) {
+                    publicCheckbox.checked = false;
+                }
+            }
+            if (publicScopeRow) {
+                publicScopeRow.classList.toggle('is-disabled', locked);
+            }
+            if (lockBadge) {
+                lockBadge.classList.toggle('hidden', !locked);
+            }
+            if (lockHint) {
+                lockHint.classList.toggle('hidden', !locked);
+            }
+            if (shareTurnstileHint) {
+                const currentHost = window.location.host.trim().toLowerCase();
+                const normalizedShareDomain = shareDomain.trim().toLowerCase();
+                let hintText = '当前默认关闭。配置独立分享域名后，系统会根据域名是否一致给出建议。';
+                let hintClass = 'is-neutral';
+
+                if (shareDomainEnabled && normalizedShareDomain) {
+                    if (normalizedShareDomain === currentHost) {
+                        hintText = '当前公开分享域名与管理员后台域名一致，可以继续共用管理员默认 Turnstile；如果想完全隔离，也可以单独开启。';
+                    } else {
+                        hintText = '当前公开分享域名与管理员后台域名不一致，建议开启独立 Cloudflare Turnstile 并填写这一组专用密钥。';
+                        hintClass = 'is-warning';
+                    }
+                } else if (shareDomainEnabled) {
+                    hintText = '请先填写公开分享域名，系统会判断是否建议启用独立 Turnstile。';
+                }
+
+                shareTurnstileHint.textContent = hintText;
+                shareTurnstileHint.classList.toggle('is-warning', hintClass === 'is-warning');
+                shareTurnstileHint.classList.toggle('is-neutral', hintClass !== 'is-warning');
+            }
+        }
+
+        function toggleShareDomainTurnstileSettings() {
+            const shareDomainEnabled = !!document.getElementById('siteSettingsShareDomainEnabled')?.checked;
+            const enabled = shareDomainEnabled && !!document.getElementById('siteSettingsShareDomainTurnstileEnabled')?.checked;
+            const siteKeyInput = document.getElementById('siteSettingsShareDomainTurnstileSiteKey');
+            const secretKeyInput = document.getElementById('siteSettingsShareDomainTurnstileSecretKey');
+            const checkbox = document.getElementById('siteSettingsShareDomainTurnstileEnabled');
+
+            if (checkbox) {
+                checkbox.disabled = !shareDomainEnabled;
+                if (!shareDomainEnabled) {
+                    checkbox.checked = false;
+                }
+            }
+            if (siteKeyInput) {
+                siteKeyInput.disabled = !enabled;
+            }
+            if (secretKeyInput) {
+                secretKeyInput.disabled = !enabled;
+            }
+            updatePublicTurnstileScopeAvailability();
         }
 
         function renderSiteSettingsStatus(config = {}, message = '') {
@@ -10434,6 +10583,8 @@ Authorization: Bearer om_your_api_key
             const shareEnabled = !!config.share_domain_enabled && !!config.share_domain;
             const shareText = shareEnabled ? `已启用独立分享域名：${config.share_domain}` : '未启用独立分享域名';
             const turnstileConfigured = !!(config.turnstile_site_key && config.turnstile_secret_key);
+            const shareDomainTurnstileConfigured = !!(config.share_domain_turnstile_site_key && config.share_domain_turnstile_secret_key);
+            const shareDomainTurnstileEnabled = shareEnabled && !!config.share_domain_turnstile_enabled && shareDomainTurnstileConfigured;
             const turnstileScopes = [
                 config.turnstile_enabled_for_admin_login ? '管理员登录页' : '',
                 config.turnstile_enabled_for_public_access ? '公开页面密码验证' : ''
@@ -10441,11 +10592,15 @@ Authorization: Bearer om_your_api_key
             const turnstileText = !turnstileConfigured
                 ? '未配置 Cloudflare Turnstile'
                 : (turnstileScopes.length ? `已启用：${turnstileScopes.join('、')}` : '已配置 Cloudflare Turnstile，但暂未绑定页面');
+            const shareTurnstileText = shareDomainTurnstileEnabled
+                ? '公开分享域名已启用独立 Turnstile'
+                : '公开分享域名未启用独立 Turnstile';
             const summary = message || `网站主页会显示“${config.home_title || 'Microsoft-Email-Manager'}”及其介绍文案。`;
             statusElement.innerHTML = `
                 <strong>当前后台入口：</strong>${escapeHtml(adminPath)}<br>
                 <strong>分享域名：</strong>${escapeHtml(shareText)}<br>
                 <strong>Turnstile：</strong>${escapeHtml(turnstileText)}<br>
+                <strong>公开域名独立 Turnstile：</strong>${escapeHtml(shareTurnstileText)}<br>
                 <strong>说明：</strong>${escapeHtml(summary)}
             `;
         }
@@ -10488,6 +10643,9 @@ Authorization: Bearer om_your_api_key
                 document.getElementById('siteSettingsAdminUrl').value = config.admin_login_url || `${window.location.origin}${currentAdminLoginPath}`;
                 document.getElementById('siteSettingsShareDomainEnabled').checked = !!config.share_domain_enabled;
                 document.getElementById('siteSettingsShareDomain').value = config.share_domain || '';
+                document.getElementById('siteSettingsShareDomainTurnstileEnabled').checked = !!config.share_domain_turnstile_enabled;
+                document.getElementById('siteSettingsShareDomainTurnstileSiteKey').value = config.share_domain_turnstile_site_key || '';
+                document.getElementById('siteSettingsShareDomainTurnstileSecretKey').value = config.share_domain_turnstile_secret_key || '';
                 document.getElementById('siteSettingsTurnstileSiteKey').value = config.turnstile_site_key || '';
                 document.getElementById('siteSettingsTurnstileSecretKey').value = config.turnstile_secret_key || '';
                 document.getElementById('siteSettingsTurnstileAdminEnabled').checked = !!config.turnstile_enabled_for_admin_login;
@@ -10512,6 +10670,9 @@ Authorization: Bearer om_your_api_key
             const adminPath = normalizeAdminPathInput(document.getElementById('siteSettingsAdminPath').value);
             const shareDomainEnabled = document.getElementById('siteSettingsShareDomainEnabled').checked;
             const shareDomain = document.getElementById('siteSettingsShareDomain').value.trim();
+            const shareDomainTurnstileEnabled = document.getElementById('siteSettingsShareDomainTurnstileEnabled').checked;
+            const shareDomainTurnstileSiteKey = document.getElementById('siteSettingsShareDomainTurnstileSiteKey').value.trim();
+            const shareDomainTurnstileSecretKey = document.getElementById('siteSettingsShareDomainTurnstileSecretKey').value.trim();
             const turnstileSiteKey = document.getElementById('siteSettingsTurnstileSiteKey').value.trim();
             const turnstileSecretKey = document.getElementById('siteSettingsTurnstileSecretKey').value.trim();
             const turnstileAdminEnabled = document.getElementById('siteSettingsTurnstileAdminEnabled').checked;
@@ -10534,6 +10695,14 @@ Authorization: Bearer om_your_api_key
                 showNotification('启用独立分享域名后必须填写域名', 'warning');
                 return;
             }
+            if (shareDomainTurnstileEnabled && !shareDomainEnabled) {
+                showNotification('请先启用独立分享域名，再单独启用公开分享域名 Turnstile', 'warning');
+                return;
+            }
+            if (shareDomainTurnstileEnabled && (!shareDomainTurnstileSiteKey || !shareDomainTurnstileSecretKey)) {
+                showNotification('启用公开分享域名独立 Turnstile 前请先完整填写独立 Site Key 和 Secret Key', 'warning');
+                return;
+            }
             if ((turnstileAdminEnabled || turnstilePublicEnabled) && (!turnstileSiteKey || !turnstileSecretKey)) {
                 showNotification('启用 Turnstile 前请先完整填写 Site Key 和 Secret Key', 'warning');
                 return;
@@ -10551,10 +10720,13 @@ Authorization: Bearer om_your_api_key
                         admin_login_path: adminPath,
                         share_domain_enabled: shareDomainEnabled,
                         share_domain: shareDomainEnabled ? shareDomain : '',
+                        share_domain_turnstile_enabled: shareDomainEnabled ? shareDomainTurnstileEnabled : false,
+                        share_domain_turnstile_site_key: shareDomainEnabled ? shareDomainTurnstileSiteKey : '',
+                        share_domain_turnstile_secret_key: shareDomainEnabled ? shareDomainTurnstileSecretKey : '',
                         turnstile_site_key: turnstileSiteKey,
                         turnstile_secret_key: turnstileSecretKey,
                         turnstile_enabled_for_admin_login: turnstileAdminEnabled,
-                        turnstile_enabled_for_public_access: turnstilePublicEnabled
+                        turnstile_enabled_for_public_access: shareDomainTurnstileEnabled ? false : turnstilePublicEnabled
                     })
                 });
 
@@ -10563,6 +10735,9 @@ Authorization: Bearer om_your_api_key
                 document.getElementById('siteSettingsAdminPath').value = currentAdminLoginPath;
                 document.getElementById('siteSettingsAdminUrl').value = config.admin_login_url || `${window.location.origin}${currentAdminLoginPath}`;
                 document.getElementById('siteSettingsShareDomain').value = config.share_domain || '';
+                document.getElementById('siteSettingsShareDomainTurnstileEnabled').checked = !!config.share_domain_turnstile_enabled;
+                document.getElementById('siteSettingsShareDomainTurnstileSiteKey').value = config.share_domain_turnstile_site_key || '';
+                document.getElementById('siteSettingsShareDomainTurnstileSecretKey').value = config.share_domain_turnstile_secret_key || '';
                 document.getElementById('siteSettingsTurnstileSiteKey').value = config.turnstile_site_key || '';
                 document.getElementById('siteSettingsTurnstileSecretKey').value = config.turnstile_secret_key || '';
                 document.getElementById('siteSettingsTurnstileAdminEnabled').checked = !!config.turnstile_enabled_for_admin_login;
