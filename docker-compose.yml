@@ -1,7 +1,7 @@
 services:
   outlook-email-client:
-    image: maishanhub/outlookmanager:main
-    container_name: outlook-email-api
+    image: maishanhub/microsoft-email-manager:main
+    container_name: microsoft-email-manager
     ports:
       - "8073:8000"
     volumes:
