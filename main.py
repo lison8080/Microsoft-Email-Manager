@@ -1304,6 +1304,17 @@ async def get_all_accounts(
 # Auth/file helpers can call each other while operating on the same on-disk state.
 # Use a re-entrant lock so nested reads/writes do not deadlock the request thread.
 auth_lock = threading.RLock()
+account_health_check_lock = threading.RLock()
+account_health_check_state: dict[str, Any] = {
+    "task_id": None,
+    "running": False,
+    "total": 0,
+    "checked": 0,
+    "results": {},
+    "started_at": None,
+    "completed_at": None,
+    "error": "",
+}
 
 
 def _read_json_file(path: Path, default: dict[str, Any]) -> dict[str, Any]:
@@ -2684,6 +2695,77 @@ async def refresh_all_account_health() -> dict[str, Any]:
     }
 
 
+def get_account_health_check_state() -> dict[str, Any]:
+    with account_health_check_lock:
+        return {
+            "task_id": account_health_check_state.get("task_id"),
+            "running": bool(account_health_check_state.get("running")),
+            "total": int(account_health_check_state.get("total", 0) or 0),
+            "checked": int(account_health_check_state.get("checked", 0) or 0),
+            "results": dict(account_health_check_state.get("results", {})),
+            "started_at": account_health_check_state.get("started_at"),
+            "completed_at": account_health_check_state.get("completed_at"),
+            "error": str(account_health_check_state.get("error") or ""),
+        }
+
+
+def update_account_health_check_state(**payload: Any) -> dict[str, Any]:
+    with account_health_check_lock:
+        account_health_check_state.update(payload)
+        return get_account_health_check_state()
+
+
+async def run_account_health_check_task(task_id: str) -> None:
+    accounts_data = load_accounts_data()
+    account_ids = list(accounts_data.keys())
+    update_account_health_check_state(
+        task_id=task_id,
+        running=True,
+        total=len(account_ids),
+        checked=0,
+        results={},
+        started_at=datetime.utcnow().isoformat(),
+        completed_at=None,
+        error="",
+    )
+
+    if not account_ids:
+        update_account_health_check_state(running=False, completed_at=datetime.utcnow().isoformat())
+        return
+
+    results: dict[str, Any] = {}
+    try:
+        for index, email_id in enumerate(account_ids, start=1):
+            try:
+                results[email_id] = await refresh_account_health(email_id)
+            except HTTPException as exc:
+                record = build_account_health_record("error", 10, "健康检查失败", str(exc.detail))
+                save_account_health_record(email_id, record)
+                results[email_id] = record
+            except Exception as exc:
+                record = build_account_health_record("error", 10, "健康检查失败", str(exc))
+                save_account_health_record(email_id, record)
+                results[email_id] = record
+
+            update_account_health_check_state(checked=index, results=dict(results))
+    except Exception as exc:
+        update_account_health_check_state(running=False, completed_at=datetime.utcnow().isoformat(), error=str(exc), results=dict(results))
+        raise
+
+    update_account_health_check_state(running=False, completed_at=datetime.utcnow().isoformat(), error="", results=dict(results))
+
+
+def start_account_health_check() -> dict[str, Any]:
+    current_state = get_account_health_check_state()
+    if current_state.get("running"):
+        return current_state
+
+    task_id = secrets.token_urlsafe(12)
+    update_account_health_check_state(task_id=task_id)
+    asyncio.create_task(run_account_health_check_task(task_id))
+    return get_account_health_check_state()
+
+
 # ============================================================================
 # IMAP核心服务 - 邮件列表
 # ============================================================================
@@ -3750,7 +3832,13 @@ async def register_account(credentials: AccountCredentials, request: Request):
 @app.post("/accounts/health-check")
 async def run_accounts_health_check(request: Request):
     require_authenticated(request, allow_api_key=True)
-    return await refresh_all_account_health()
+    return start_account_health_check()
+
+
+@app.get("/accounts/health-check")
+async def get_accounts_health_check_status(request: Request):
+    require_authenticated(request, allow_api_key=True)
+    return get_account_health_check_state()
 
 
 @app.get("/emails/{email_id}", response_model=EmailListResponse)

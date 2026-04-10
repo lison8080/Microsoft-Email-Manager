@@ -3050,24 +3050,33 @@
             flex-wrap: wrap;
         }
 
+        .accounts-page-heading-meta {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            flex-wrap: wrap;
+        }
+
+        .account-selection-summary-inline {
+            color: #64748b;
+            font-size: 0.78rem;
+            line-height: 1.6;
+            padding: 4px 10px;
+            border-radius: 999px;
+            background: rgba(248, 250, 252, 0.88);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+        }
+
         .account-selection-toolbar {
             display: flex;
             align-items: center;
-            justify-content: space-between;
+            justify-content: flex-end;
             gap: 14px;
-            padding: 14px 16px;
+            padding: 10px 0 0;
             border-radius: 18px;
-            border: 1px solid rgba(148, 163, 184, 0.22);
-            background: linear-gradient(135deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.88));
+            border: none;
+            background: transparent;
             margin-bottom: 4px;
-        }
-
-        .account-selection-summary {
-            flex: 1;
-            min-width: 240px;
-            color: #475569;
-            font-size: 0.9rem;
-            line-height: 1.6;
         }
 
         .account-selection-controls {
@@ -3097,6 +3106,16 @@
             width: 16px;
             height: 16px;
             accent-color: #16a34a;
+        }
+
+        .account-selection-controls .btn.is-active {
+            background: rgba(34, 197, 94, 0.12);
+            border-color: rgba(34, 197, 94, 0.28);
+            color: #166534;
+        }
+
+        .account-selection-controls .btn.is-disabled {
+            opacity: 0.62;
         }
 
         .account-settings-modal-footer {
@@ -3174,6 +3193,11 @@
             user-select: none;
         }
 
+        .account-item .account-selection-chip {
+            align-self: center;
+            margin: 4px 0 2px;
+        }
+
         .account-selection-chip::before {
             content: "";
             width: 12px;
@@ -3188,6 +3212,28 @@
             background: #22c55e;
             border-color: #16a34a;
             box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.85);
+        }
+
+        .account-health-progress {
+            position: fixed;
+            top: 72px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: min(420px, calc(100vw - 80px));
+            height: 10px;
+            border-radius: 999px;
+            background: rgba(226, 232, 240, 0.88);
+            overflow: hidden;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+            z-index: 1600;
+        }
+
+        .account-health-progress-inner {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+            transition: width 0.25s ease;
         }
 
         .public-share-grid {
@@ -3671,9 +3717,13 @@
                 width: 100%;
             }
 
+            .accounts-page-heading-meta {
+                align-items: flex-start;
+            }
+
             .account-selection-toolbar {
                 flex-direction: column;
-                align-items: stretch;
+                align-items: flex-end;
             }
 
             .account-info {
@@ -5164,7 +5214,12 @@
                         <div class="flex items-center justify-between mb-4">
                             <div>
                                 <h3 class="font-semibold">邮箱账户管理</h3>
-                                <p class="text-sm" style="color: #64748b;">管理所有已接入的 微软 邮箱账户</p>
+                                <div class="accounts-page-heading-meta">
+                                    <p class="text-sm" style="color: #64748b;">管理所有已接入的 微软 邮箱账户</p>
+                                    <div id="accountsSelectionSummary" class="account-selection-summary-inline">
+                                        当前未开启批量选择，点击卡片会直接进入邮箱页面。
+                                    </div>
+                                </div>
                             </div>
                             <div class="flex gap-2">
                                 <button class="btn btn-primary btn-sm" onclick="showPage('addAccount')">
@@ -5225,9 +5280,6 @@
                                 </div>
                             </div>
                             <div class="account-selection-toolbar">
-                                <div id="accountsSelectionSummary" class="account-selection-summary">
-                                    当前未开启批量选择，点击卡片会直接进入邮箱页面。
-                                </div>
                                 <div class="account-selection-controls">
                                     <button id="accountsDisplaySettingsBtn" class="btn btn-secondary btn-sm" type="button" onclick="openAccountsDisplaySettingsModal()">
                                         <span></span>
@@ -5235,11 +5287,15 @@
                                     </button>
                                     <label class="account-bulk-toggle" for="accountsBulkModeToggle">
                                         <input type="checkbox" id="accountsBulkModeToggle" onchange="toggleAccountsBulkMode(this.checked)">
-                                        <span>批量选择</span>
+                                        <span>批量管理</span>
                                     </label>
                                     <button id="accountsSelectAllBtn" class="btn btn-secondary btn-sm" type="button" onclick="toggleSelectAllFilteredAccounts()">
                                         <span></span>
-                                        全选筛选结果
+                                        全选
+                                    </button>
+                                    <button id="accountsBatchConfigBtn" class="btn btn-secondary btn-sm" type="button" onclick="openBatchAccountConfigModal()">
+                                        <span></span>
+                                        批量配置
                                     </button>
                                 </div>
                             </div>
@@ -6394,6 +6450,9 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
 
     <!-- 閫氱煡瀹瑰櫒 -->
     <div id="notificationContainer" class="notification-container"></div>
+    <div id="accountHealthProgressBar" class="account-health-progress hidden">
+        <div id="accountHealthProgressBarInner" class="account-health-progress-inner"></div>
+    </div>
 
     <!-- 邮件详情模态框 -->
     <div id="emailModal" class="modal hidden">
@@ -6439,6 +6498,39 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeTagsModal()">取消</button>
                 <button class="btn btn-primary" onclick="saveAccountTags()">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="batchAccountConfigModal" class="modal hidden">
+        <div class="modal-content" style="max-width: 560px;">
+            <div class="modal-header">
+                <h3>批量配置邮箱</h3>
+                <button class="modal-close" type="button" onclick="closeBatchAccountConfigModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="batchAccountConfigSummary" class="public-share-status" style="margin-bottom: 18px;">当前选中了 0 个邮箱</div>
+                <div class="form-group">
+                    <label class="form-label" for="batchConfigCategoryKey">批量设置分类</label>
+                    <select id="batchConfigCategoryKey" class="form-input">
+                        <option value="">不分类</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <div class="flex items-center justify-between">
+                        <label class="form-label" style="margin-bottom: 0;">批量设置标签</label>
+                        <button class="btn btn-secondary btn-sm" type="button" onclick="showPage('classifications'); closeBatchAccountConfigModal();">
+                            <span></span>
+                            去分类编辑
+                        </button>
+                    </div>
+                    <div id="batchConfigTagsList" class="option-grid"></div>
+                    <div id="batchConfigTagsEmpty" class="selection-empty hidden">暂无标签，请先创建标签。</div>
+                </div>
+            </div>
+            <div class="modal-footer account-settings-modal-footer">
+                <button class="btn btn-secondary" type="button" onclick="closeBatchAccountConfigModal()">取消</button>
+                <button class="btn btn-primary" type="button" id="batchAccountConfigSaveBtn" onclick="saveBatchAccountConfig()">完成</button>
             </div>
         </div>
     </div>
@@ -6638,6 +6730,9 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
         let accountSelectionDragActive = false;
         let accountSelectionDragValue = false;
         let pendingAccountsPageSize = 10;
+        let batchConfigCategoryKey = '';
+        let batchConfigTagKeys = [];
+        let accountHealthProgressPollTimer = null;
         let authState = null;
         let appBootstrapped = false;
         let setupAgreementComplete = false;
@@ -6855,10 +6950,40 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             viewAccountEmails(emailId);
         }
 
+        function areAllFilteredAccountsSelected() {
+            if (!accountsTotalCount) {
+                return false;
+            }
+            if (selectedAccountIds.size < accountsTotalCount) {
+                return false;
+            }
+            return accounts.every(account => selectedAccountIds.has(account.email_id));
+        }
+
+        function updateAccountsActionButtons() {
+            const selectAllButton = document.getElementById('accountsSelectAllBtn');
+            const batchConfigButton = document.getElementById('accountsBatchConfigBtn');
+            const allSelected = areAllFilteredAccountsSelected();
+            const selectedCount = selectedAccountIds.size;
+
+            if (selectAllButton) {
+                selectAllButton.disabled = !bulkAccountSelectionEnabled || !accountsTotalCount;
+                selectAllButton.classList.toggle('is-active', bulkAccountSelectionEnabled && allSelected);
+                selectAllButton.classList.toggle('is-disabled', selectAllButton.disabled);
+                setButtonIcon(selectAllButton, bulkAccountSelectionEnabled && allSelected ? 'success' : 'error');
+            }
+
+            if (batchConfigButton) {
+                batchConfigButton.disabled = selectedCount === 0;
+                batchConfigButton.classList.toggle('is-active', selectedCount > 0);
+                batchConfigButton.classList.toggle('is-disabled', selectedCount === 0);
+                setButtonIcon(batchConfigButton, 'classification');
+            }
+        }
+
         function updateAccountsSelectionSummary() {
             const summary = document.getElementById('accountsSelectionSummary');
             const toggle = document.getElementById('accountsBulkModeToggle');
-            const selectAllButton = document.getElementById('accountsSelectAllBtn');
             const selectedCount = selectedAccountIds.size;
             const filteredCount = accountsTotalCount || 0;
             const selectedCountElement = document.getElementById('selectedAccountsCount');
@@ -6869,23 +6994,21 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             if (toggle) {
                 toggle.checked = bulkAccountSelectionEnabled;
             }
-            if (selectAllButton) {
-                selectAllButton.disabled = !bulkAccountSelectionEnabled || filteredCount === 0;
-            }
+            updateAccountsActionButtons();
             if (!summary) {
                 return;
             }
 
             if (!bulkAccountSelectionEnabled) {
                 summary.textContent = selectedCount > 0
-                    ? `当前未开启批量选择，已暂存 ${selectedCount} 个已选账户；重新开启后会继续保留。`
+                    ? `已暂存 ${selectedCount} 个批量选择结果，重新开启后会继续保留。`
                     : '当前未开启批量选择，点击卡片会直接进入邮箱页面。';
                 return;
             }
 
             summary.textContent = selectedCount > 0
-                ? `批量选择已开启，当前共选中 ${selectedCount} 个账户。支持点击卡片或按住鼠标从上到下拖拽连续选择。`
-                : `批量选择已开启，当前筛选结果共 ${filteredCount} 个账户。支持点击卡片或按住鼠标从上到下拖拽连续选择。`;
+                ? `批量管理已开启，已选中 ${selectedCount} 个邮箱。`
+                : `批量管理已开启，当前筛选结果共 ${filteredCount} 个邮箱。`;
         }
 
         function renderAccountsSelectionState() {
@@ -6895,7 +7018,7 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
                 list.querySelectorAll('.account-item[data-email-id]').forEach(item => {
                     const emailId = item.getAttribute('data-email-id') || '';
                     item.classList.toggle('is-bulk-mode', bulkAccountSelectionEnabled);
-                    item.classList.toggle('is-selected', selectedAccountIds.has(emailId));
+                    item.classList.toggle('is-selected', bulkAccountSelectionEnabled && selectedAccountIds.has(emailId));
                     const chip = item.querySelector('.account-selection-chip');
                     if (chip) {
                         chip.textContent = selectedAccountIds.has(emailId) ? '已选中' : '点击或拖拽选择';
@@ -6961,6 +7084,65 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
                 showNotification(shouldClear ? `已取消 ${filteredIds.length} 个筛选结果的选择` : `已选中 ${filteredIds.length} 个筛选结果`, 'success');
             } catch (error) {
                 showNotification('批量选择筛选结果失败: ' + error.message, 'error');
+            }
+        }
+
+        function toggleBatchConfigTag(key) {
+            batchConfigTagKeys = toggleKeyInList(batchConfigTagKeys, key);
+            renderTagOptionGrid('batchConfigTagsList', 'batchConfigTagsEmpty', batchConfigTagKeys, 'toggleBatchConfigTag');
+        }
+
+        async function openBatchAccountConfigModal() {
+            if (selectedAccountIds.size === 0) {
+                showNotification('请先选择至少一个邮箱', 'warning');
+                return;
+            }
+
+            await loadClassifications().catch(() => null);
+            batchConfigCategoryKey = '';
+            batchConfigTagKeys = [];
+            document.getElementById('batchAccountConfigSummary').textContent = `当前选择了 ${selectedAccountIds.size} 个邮箱`;
+            populateCategorySelect('batchConfigCategoryKey', batchConfigCategoryKey);
+            renderTagOptionGrid('batchConfigTagsList', 'batchConfigTagsEmpty', batchConfigTagKeys, 'toggleBatchConfigTag');
+            document.getElementById('batchAccountConfigModal').classList.remove('hidden');
+        }
+
+        function closeBatchAccountConfigModal() {
+            document.getElementById('batchAccountConfigModal').classList.add('hidden');
+            batchConfigCategoryKey = '';
+            batchConfigTagKeys = [];
+        }
+
+        async function saveBatchAccountConfig() {
+            const emailIds = [...selectedAccountIds];
+            if (!emailIds.length) {
+                closeBatchAccountConfigModal();
+                return;
+            }
+
+            const saveBtn = document.getElementById('batchAccountConfigSaveBtn');
+            const categoryKey = document.getElementById('batchConfigCategoryKey').value.trim();
+            saveBtn.disabled = true;
+            saveBtn.textContent = '处理中...';
+
+            try {
+                for (const emailId of emailIds) {
+                    await apiRequest('/accounts/' + encodeURIComponent(emailId) + '/classification', {
+                        method: 'PUT',
+                        body: JSON.stringify({
+                            category_key: categoryKey || null,
+                            tag_keys: batchConfigTagKeys
+                        })
+                    });
+                }
+                closeBatchAccountConfigModal();
+                await loadAccounts(accountsCurrentPage);
+                showNotification(`已完成 ${emailIds.length} 个邮箱的批量配置`, 'success');
+            } catch (error) {
+                showNotification('批量配置失败: ' + error.message, 'error');
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.textContent = '完成';
             }
         }
 
@@ -7855,7 +8037,8 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             setButtonIcon(document.querySelector('#accountsPage .btn-secondary.btn-sm[onclick="showPage(\'classifications\')"]'), 'classification');
             setButtonIcon(document.querySelector('#accountsPage .btn-secondary.btn-sm[onclick="loadAccounts()"]'), 'refresh');
             setButtonIcon(document.getElementById('accountsDisplaySettingsBtn'), 'settings');
-            setButtonIcon(document.getElementById('accountsSelectAllBtn'), 'success');
+            setButtonIcon(document.getElementById('accountsSelectAllBtn'), 'error');
+            setButtonIcon(document.getElementById('accountsBatchConfigBtn'), 'classification');
             setButtonIcon(document.querySelector('#accountsPage .btn-primary[onclick="searchAccounts()"]'), 'search');
             setButtonIcon(document.querySelector('#accountsPage .btn-secondary[onclick="clearSearch()"]'), 'clear');
             setButtonIcon(document.getElementById('prevPageBtn'), 'arrow-left');
@@ -8371,11 +8554,13 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             populateCategorySelect('batchCategoryKey', batchCategoryValue);
             populateCategorySelect('editAccountCategoryKey', editCategoryValue);
             populateCategorySelect('accountCategorySearch', searchCategoryValue, true, '全部分类');
+            populateCategorySelect('batchConfigCategoryKey', batchConfigCategoryKey);
             populateTagFilterSelect(searchTagValue);
             populateEmailDomainFilterSelect();
             renderTagOptionGrid('addAccountTagsSelector', 'addAccountTagsEmpty', addAccountTagKeys, 'toggleAddAccountTag');
             renderTagOptionGrid('batchTagsSelector', 'batchTagsEmpty', batchTagKeys, 'toggleBatchTag');
             renderTagOptionGrid('currentTagsList', 'editAccountTagsEmpty', currentEditTags, 'toggleEditAccountTag', currentEditTagDetails);
+            renderTagOptionGrid('batchConfigTagsList', 'batchConfigTagsEmpty', batchConfigTagKeys, 'toggleBatchConfigTag');
             renderTaxonomyList('categoriesList', classifications.categories, 'categories');
             renderTaxonomyList('tagDefinitionsList', classifications.tags, 'tags');
         }
@@ -8673,20 +8858,73 @@ example3@live.com----refresh_token3----client_id3`;
             };
         }
 
+        function setAccountHealthProgress(value) {
+            const progress = document.getElementById('accountHealthProgressBarInner');
+            if (!progress) return;
+            const percent = Math.max(0, Math.min(100, Number(value) || 0));
+            progress.style.width = `${percent}%`;
+        }
+
+        function showAccountHealthProgress() {
+            const bar = document.getElementById('accountHealthProgressBar');
+            if (!bar) return;
+            bar.classList.remove('hidden');
+        }
+
+        function hideAccountHealthProgress() {
+            const bar = document.getElementById('accountHealthProgressBar');
+            if (accountHealthProgressPollTimer) {
+                clearTimeout(accountHealthProgressPollTimer);
+                accountHealthProgressPollTimer = null;
+            }
+            if (!bar) return;
+            bar.classList.add('hidden');
+            setAccountHealthProgress(0);
+        }
+
+        async function waitForAccountHealthCheck(taskId) {
+            while (true) {
+                const state = await apiRequest('/accounts/health-check');
+                if (taskId && state.task_id && state.task_id !== taskId && !state.running) {
+                    return state;
+                }
+
+                const total = Math.max(0, Number(state.total) || 0);
+                const checked = Math.max(0, Number(state.checked) || 0);
+                const percent = total > 0 ? (checked / total) * 100 : (state.running ? 8 : 100);
+                setAccountHealthProgress(percent);
+
+                if (!state.running) {
+                    setAccountHealthProgress(100);
+                    return state;
+                }
+
+                await new Promise(resolve => {
+                    accountHealthProgressPollTimer = window.setTimeout(resolve, 260);
+                });
+            }
+        }
+
         async function refreshAccountHealth() {
             const button = document.getElementById('accountHealthBtn');
             if (!button) return;
 
             button.disabled = true;
             button.innerHTML = buttonLabel('loading', '检查中...', 'spinning');
+            showAccountHealthProgress();
+            setAccountHealthProgress(8);
 
             try {
-                const result = await apiRequest('/accounts/health-check', { method: 'POST' });
+                const state = await apiRequest('/accounts/health-check', { method: 'POST' });
+                const result = await waitForAccountHealthCheck(state.task_id);
+                if (result.error) {
+                    throw new Error(result.error);
+                }
                 await loadAccounts(accountsCurrentPage);
-                showNotification(`健康检查完成，已刷新 ${result.checked || 0} 个账户状态`, 'success');
             } catch (error) {
                 showNotification('检查账户健康失败: ' + error.message, 'error');
             } finally {
+                window.setTimeout(() => hideAccountHealthProgress(), 220);
                 button.disabled = false;
                 button.innerHTML = buttonLabel('health', '检查账户健康');
             }
@@ -8717,12 +8955,11 @@ example3@live.com----refresh_token3----client_id3`;
                 const cardClasses = [
                     'account-item',
                     bulkAccountSelectionEnabled ? 'is-bulk-mode' : '',
-                    isSelected ? 'is-selected' : ''
+                    (bulkAccountSelectionEnabled && isSelected) ? 'is-selected' : ''
                 ].filter(Boolean).join(' ');
 
                 return `
                     <div class="${cardClasses}" data-email-id="${escapeHtml(account.email_id)}" onclick="handleAccountCardClick(event, '${account.email_id}')" onpointerdown="handleAccountSelectionPointerDown(event, '${account.email_id}')" onpointerenter="handleAccountSelectionPointerEnter(event, '${account.email_id}')" oncontextmenu="showAccountContextMenu(event, '${account.email_id}')">
-                        ${bulkAccountSelectionEnabled ? `<div class="account-selection-chip">${isSelected ? '已选中' : '点击或拖拽选择'}</div>` : ''}
                         <div class="account-info">
                             ${renderSenderAvatar(account.email_id.charAt(0).toUpperCase(), '', 'account-avatar')}
                             <div class="account-details">
@@ -8733,6 +8970,7 @@ example3@live.com----refresh_token3----client_id3`;
                                 ${tagsHtml}
                             </div>
                         </div>
+                        ${bulkAccountSelectionEnabled ? `<div class="account-selection-chip">${isSelected ? '已选中' : '点击或拖拽选择'}</div>` : ''}
                         <div class="account-actions" onclick="event.stopPropagation()">
                             <button class="btn btn-primary btn-sm" onclick="viewAccountEmails('${account.email_id}')">
                                 <span></span>
@@ -11532,6 +11770,12 @@ Authorization: Bearer om_your_api_key
             }
         });
 
+        document.getElementById('batchAccountConfigModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeBatchAccountConfigModal();
+            }
+        });
+
         document.getElementById('accountsDisplaySettingsModal').addEventListener('click', function(e) {
             if (e.target === this) {
                 closeAccountsDisplaySettingsModal();
@@ -11565,6 +11809,7 @@ Authorization: Bearer om_your_api_key
             if (e.key === 'Escape') {
                 closeEmailModal();
                 closeApiKeyActionModal();
+                closeBatchAccountConfigModal();
                 closeAccountsDisplaySettingsModal();
                 stopAccountSelectionDrag();
             }
