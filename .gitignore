@@ -1,5 +1,7 @@
 .vscode
 __pycache__
+.conda-env/
+.venv/
 accounts.json
 .DS_Store
 

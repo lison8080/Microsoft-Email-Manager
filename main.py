@@ -1410,6 +1410,27 @@ def save_accounts_data(data: dict[str, Any]) -> None:
         _write_json_file(ACCOUNTS_FILE, data if isinstance(data, dict) else {})
 
 
+def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_token: str | None) -> None:
+    rotated_token = str(new_refresh_token or "").strip()
+    if not rotated_token or rotated_token == credentials.refresh_token:
+        return
+
+    with auth_lock:
+        accounts = _read_json_file(ACCOUNTS_FILE, {})
+        if not isinstance(accounts, dict):
+            raise HTTPException(status_code=500, detail="Accounts file format error")
+
+        account_data = accounts.get(credentials.email)
+        if not isinstance(account_data, dict):
+            raise HTTPException(status_code=500, detail=f"Account {credentials.email} not found during token rotation")
+
+        account_data["refresh_token"] = rotated_token
+        accounts[credentials.email] = account_data
+        _write_json_file(ACCOUNTS_FILE, accounts)
+
+    logger.info("Persisted rotated refresh token for %s", credentials.email)
+
+
 def load_account_health_data() -> dict[str, Any]:
     with auth_lock:
         data = _read_json_file(ACCOUNT_HEALTH_FILE, {"accounts": {}})
@@ -2470,6 +2491,8 @@ async def get_access_token(credentials: AccountCredentials) -> str:
                                 status_code=401,
                                 detail="Failed to obtain access token from response",
                             )
+
+                        persist_rotated_refresh_token(credentials, token_data.get("refresh_token"))
 
                         logger.info(
                             "Successfully obtained %s access token for %s via %s",
