@@ -193,3 +193,36 @@ def test_start_refresh_token_check_reuses_running_task(monkeypatch):
     assert state["running"] is True
     assert called is False
     main.refresh_token_check_state.update({"running": False})
+
+
+def test_refresh_account_health_preserves_refresh_token_metadata(monkeypatch, tmp_path):
+    accounts_file = tmp_path / "accounts.json"
+    health_file = tmp_path / "account_health.json"
+    write_accounts(
+        accounts_file,
+        {
+            "user@example.com": {
+                "refresh_token": "old-refresh",
+                "client_id": "client-id",
+                "auth_method": "graph",
+            }
+        },
+    )
+    monkeypatch.setattr(main, "ACCOUNTS_FILE", accounts_file)
+    monkeypatch.setattr(main, "ACCOUNT_HEALTH_FILE", health_file)
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+    FakeAsyncClient.token_payload = {"access_token": "access-token"}
+
+    async def fake_graph_api_get(access_token, path, params=None):
+        return {"id": "inbox"}
+
+    monkeypatch.setattr(main, "graph_api_get", fake_graph_api_get)
+
+    record = asyncio.run(main.refresh_account_health("user@example.com"))
+
+    saved = json.loads(health_file.read_text(encoding="utf-8"))["accounts"]["user@example.com"]
+    assert record["status"] == "healthy"
+    assert saved["status"] == "healthy"
+    assert saved["refresh_token_status"] == "healthy"
+    assert saved["refresh_token_summary"] == "Refresh token checked"
+    assert saved["refresh_token_checked_at"]

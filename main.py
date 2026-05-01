@@ -2310,7 +2310,12 @@ def get_account_health_record(email_id: str) -> dict[str, Any]:
 
 def save_account_health_record(email_id: str, record: dict[str, Any]) -> None:
     data = load_account_health_data()
-    data.setdefault("accounts", {})[email_id] = record
+    accounts = data.setdefault("accounts", {})
+    current = accounts.get(email_id, {})
+    if not isinstance(current, dict):
+        current = {}
+    current.update(record)
+    accounts[email_id] = current
     save_account_health_data(data)
 
 
