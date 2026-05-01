@@ -75,6 +75,10 @@ ADMIN_LOGIN_FAILURE_LIMIT = max(1, int(os.getenv("ADMIN_LOGIN_FAILURE_LIMIT", "5
 ADMIN_LOGIN_FAILURE_WINDOW_MINUTES = max(1, int(os.getenv("ADMIN_LOGIN_FAILURE_WINDOW_MINUTES", "15")))
 ADMIN_LOGIN_LOCKOUT_MINUTES = max(1, int(os.getenv("ADMIN_LOGIN_LOCKOUT_MINUTES", "15")))
 TRUST_PROXY_HEADERS = str(os.getenv("TRUST_PROXY_HEADERS", "")).strip().lower() in {"1", "true", "yes", "on"}
+AUTO_REFRESH_TOKENS_ENABLED = str(os.getenv("AUTO_REFRESH_TOKENS_ENABLED", "true")).strip().lower() in {"1", "true", "yes", "on"}
+AUTO_REFRESH_TOKENS_INTERVAL_HOURS = max(1, int(os.getenv("AUTO_REFRESH_TOKENS_INTERVAL_HOURS", "168")))
+AUTO_REFRESH_TOKENS_INITIAL_DELAY_SECONDS = max(0, int(os.getenv("AUTO_REFRESH_TOKENS_INITIAL_DELAY_SECONDS", "60")))
+AUTO_REFRESH_TOKENS_ACCOUNT_DELAY_SECONDS = max(0, int(os.getenv("AUTO_REFRESH_TOKENS_ACCOUNT_DELAY_SECONDS", "2")))
 TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 DEFAULT_ADMIN_LOGIN_PATH = "/admin"
 DEFAULT_HOME_TITLE = "Microsoft-Email-Manager"
@@ -287,6 +291,10 @@ class AccountInfo(BaseModel):
     health_score: int = 0
     health_summary: str = "未检查"
     health_checked_at: Optional[str] = None
+    refresh_token_status: str = "unchecked"
+    refresh_token_summary: str = "未检查"
+    refresh_token_checked_at: Optional[str] = None
+    refresh_token_rotated_at: Optional[str] = None
 
 
 class AccountListResponse(BaseModel):
@@ -1215,6 +1223,10 @@ async def get_all_accounts(
                 health_score=max(0, min(int(health_record.get("score", 0) or 0), 100)),
                 health_summary=str(health_record.get("summary") or "未检查"),
                 health_checked_at=health_record.get("checked_at"),
+                refresh_token_status=str(health_record.get("refresh_token_status") or "unchecked"),
+                refresh_token_summary=str(health_record.get("refresh_token_summary") or "未检查"),
+                refresh_token_checked_at=health_record.get("refresh_token_checked_at"),
+                refresh_token_rotated_at=health_record.get("refresh_token_rotated_at"),
             )
             all_accounts.append(account)
 
@@ -1318,6 +1330,18 @@ account_health_check_state: dict[str, Any] = {
     "completed_at": None,
     "error": "",
 }
+refresh_token_check_lock = threading.RLock()
+refresh_token_check_state: dict[str, Any] = {
+    "task_id": None,
+    "running": False,
+    "total": 0,
+    "checked": 0,
+    "results": {},
+    "started_at": None,
+    "completed_at": None,
+    "error": "",
+    "trigger": "",
+}
 
 
 def _read_json_file(path: Path, default: dict[str, Any]) -> dict[str, Any]:
@@ -1410,10 +1434,43 @@ def save_accounts_data(data: dict[str, Any]) -> None:
         _write_json_file(ACCOUNTS_FILE, data if isinstance(data, dict) else {})
 
 
-def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_token: str | None) -> None:
+def merge_account_health_record(email_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    data = load_account_health_data()
+    accounts = data.setdefault("accounts", {})
+    current = accounts.get(email_id, {})
+    if not isinstance(current, dict):
+        current = {}
+    current.update(payload)
+    accounts[email_id] = current
+    save_account_health_data(data)
+    return current
+
+
+def update_refresh_token_metadata(
+    email_id: str,
+    status: str,
+    summary: str,
+    checked_at: str | None = None,
+    rotated_at: str | None = None,
+    detail: str = "",
+) -> dict[str, Any]:
+    timestamp = checked_at or datetime.utcnow().isoformat()
+    payload: dict[str, Any] = {
+        "refresh_token_status": status,
+        "refresh_token_summary": summary,
+        "refresh_token_checked_at": timestamp,
+    }
+    if detail:
+        payload["refresh_token_detail"] = detail
+    if rotated_at:
+        payload["refresh_token_rotated_at"] = rotated_at
+    return merge_account_health_record(email_id, payload)
+
+
+def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_token: str | None) -> bool:
     rotated_token = str(new_refresh_token or "").strip()
     if not rotated_token or rotated_token == credentials.refresh_token:
-        return
+        return False
 
     with auth_lock:
         accounts = _read_json_file(ACCOUNTS_FILE, {})
@@ -1429,6 +1486,7 @@ def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_t
         _write_json_file(ACCOUNTS_FILE, accounts)
 
     logger.info("Persisted rotated refresh token for %s", credentials.email)
+    return True
 
 
 def load_account_health_data() -> dict[str, Any]:
@@ -2492,7 +2550,15 @@ async def get_access_token(credentials: AccountCredentials) -> str:
                                 detail="Failed to obtain access token from response",
                             )
 
-                        persist_rotated_refresh_token(credentials, token_data.get("refresh_token"))
+                        checked_at = datetime.utcnow().isoformat()
+                        rotated = persist_rotated_refresh_token(credentials, token_data.get("refresh_token"))
+                        update_refresh_token_metadata(
+                            credentials.email,
+                            "healthy",
+                            "Refresh token refreshed and rotated" if rotated else "Refresh token checked",
+                            checked_at=checked_at,
+                            rotated_at=checked_at if rotated else None,
+                        )
 
                         logger.info(
                             "Successfully obtained %s access token for %s via %s",
@@ -2786,6 +2852,118 @@ async def refresh_all_account_health() -> dict[str, Any]:
         "checked": len(results),
         "results": results,
     }
+
+
+def get_refresh_token_check_state() -> dict[str, Any]:
+    with refresh_token_check_lock:
+        return {
+            "task_id": refresh_token_check_state.get("task_id"),
+            "running": bool(refresh_token_check_state.get("running")),
+            "total": int(refresh_token_check_state.get("total", 0) or 0),
+            "checked": int(refresh_token_check_state.get("checked", 0) or 0),
+            "results": dict(refresh_token_check_state.get("results", {})),
+            "started_at": refresh_token_check_state.get("started_at"),
+            "completed_at": refresh_token_check_state.get("completed_at"),
+            "error": str(refresh_token_check_state.get("error") or ""),
+            "trigger": str(refresh_token_check_state.get("trigger") or ""),
+        }
+
+
+def update_refresh_token_check_state(**payload: Any) -> dict[str, Any]:
+    with refresh_token_check_lock:
+        refresh_token_check_state.update(payload)
+        return get_refresh_token_check_state()
+
+
+async def run_refresh_token_check_task(task_id: str, trigger: str = "manual") -> None:
+    accounts_data = load_accounts_data()
+    account_ids = list(accounts_data.keys())
+    update_refresh_token_check_state(
+        task_id=task_id,
+        running=True,
+        total=len(account_ids),
+        checked=0,
+        results={},
+        started_at=datetime.utcnow().isoformat(),
+        completed_at=None,
+        error="",
+        trigger=trigger,
+    )
+
+    if not account_ids:
+        update_refresh_token_check_state(running=False, completed_at=datetime.utcnow().isoformat())
+        return
+
+    results: dict[str, Any] = {}
+    try:
+        for index, email_id in enumerate(account_ids, start=1):
+            try:
+                record = await refresh_account_health(email_id)
+                results[email_id] = {
+                    "status": record.get("refresh_token_status") or record.get("status") or "healthy",
+                    "summary": record.get("refresh_token_summary") or record.get("summary") or "Refresh token checked",
+                    "checked_at": record.get("refresh_token_checked_at") or record.get("checked_at"),
+                    "rotated_at": record.get("refresh_token_rotated_at"),
+                }
+            except HTTPException as exc:
+                record = update_refresh_token_metadata(email_id, "auth_error", "OAuth 刷新失败", detail=str(exc.detail))
+                results[email_id] = {
+                    "status": "auth_error",
+                    "summary": "OAuth 刷新失败",
+                    "checked_at": record.get("refresh_token_checked_at"),
+                    "rotated_at": record.get("refresh_token_rotated_at"),
+                }
+            except Exception as exc:
+                record = update_refresh_token_metadata(email_id, "error", "Refresh token check failed", detail=str(exc))
+                results[email_id] = {
+                    "status": "error",
+                    "summary": "Refresh token check failed",
+                    "checked_at": record.get("refresh_token_checked_at"),
+                    "rotated_at": record.get("refresh_token_rotated_at"),
+                }
+
+            update_refresh_token_check_state(checked=index, results=dict(results))
+            if AUTO_REFRESH_TOKENS_ACCOUNT_DELAY_SECONDS > 0 and index < len(account_ids):
+                await asyncio.sleep(AUTO_REFRESH_TOKENS_ACCOUNT_DELAY_SECONDS)
+    except Exception as exc:
+        update_refresh_token_check_state(running=False, completed_at=datetime.utcnow().isoformat(), error=str(exc), results=dict(results))
+        raise
+
+    update_refresh_token_check_state(running=False, completed_at=datetime.utcnow().isoformat(), error="", results=dict(results))
+
+
+def start_refresh_token_check(trigger: str = "manual") -> dict[str, Any]:
+    current_state = get_refresh_token_check_state()
+    if current_state.get("running"):
+        return current_state
+
+    task_id = secrets.token_urlsafe(12)
+    update_refresh_token_check_state(task_id=task_id, trigger=trigger)
+    asyncio.create_task(run_refresh_token_check_task(task_id, trigger))
+    return get_refresh_token_check_state()
+
+
+async def run_auto_refresh_token_scheduler() -> None:
+    if not AUTO_REFRESH_TOKENS_ENABLED:
+        logger.info("Automatic refresh token scheduler is disabled")
+        return
+
+    initial_delay = AUTO_REFRESH_TOKENS_INITIAL_DELAY_SECONDS
+    interval_seconds = AUTO_REFRESH_TOKENS_INTERVAL_HOURS * 60 * 60
+    if initial_delay > 0:
+        await asyncio.sleep(initial_delay)
+
+    while True:
+        try:
+            logger.info("Starting scheduled refresh token check")
+            task_id = secrets.token_urlsafe(12)
+            await run_refresh_token_check_task(task_id, "scheduled")
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.error("Scheduled refresh token check failed: %s", exc)
+
+        await asyncio.sleep(interval_seconds)
 
 
 def get_account_health_check_state() -> dict[str, Any]:
@@ -3348,8 +3526,19 @@ async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
     cleanup_expired_sessions()
     cleanup_expired_open_access()
     cleanup_expired_admin_login_attempts()
+    auto_refresh_task: asyncio.Task | None = None
+    if AUTO_REFRESH_TOKENS_ENABLED:
+        auto_refresh_task = asyncio.create_task(run_auto_refresh_token_scheduler())
 
-    yield
+    try:
+        yield
+    finally:
+        if auto_refresh_task:
+            auto_refresh_task.cancel()
+            try:
+                await auto_refresh_task
+            except asyncio.CancelledError:
+                pass
 
     # 应用关闭
     logger.info("Shutting down Microsoft-Email-Manager...")
@@ -3932,6 +4121,18 @@ async def run_accounts_health_check(request: Request):
 async def get_accounts_health_check_status(request: Request):
     require_authenticated(request, allow_api_key=True)
     return get_account_health_check_state()
+
+
+@app.post("/accounts/refresh-tokens")
+async def run_accounts_refresh_token_check(request: Request):
+    require_authenticated(request, allow_api_key=True)
+    return start_refresh_token_check()
+
+
+@app.get("/accounts/refresh-tokens")
+async def get_accounts_refresh_token_check_status(request: Request):
+    require_authenticated(request, allow_api_key=True)
+    return get_refresh_token_check_state()
 
 
 @app.get("/emails/{email_id}", response_model=EmailListResponse)

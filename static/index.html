@@ -5311,6 +5311,10 @@
                                     <span></span>
                                     检查账户健康
                                 </button>
+                                <button class="btn btn-secondary btn-sm" onclick="refreshAccountTokens()" id="accountTokenRefreshBtn">
+                                    <span></span>
+                                    刷新 Refresh Token
+                                </button>
                                 <button class="btn btn-secondary btn-sm" onclick="showPage('batchAdd')">
                                     <span></span>
                                     批量添加
@@ -8141,6 +8145,7 @@ example3@outlook.com----refresh_token3----client_id3"></textarea>
             setButtonIcon(document.querySelector('#accountsPage .btn-secondary.btn-sm[onclick="showPage(\'batchAdd\')"]'), 'batch');
             setButtonIcon(document.querySelector('#accountsPage .btn-secondary.btn-sm[onclick="showPage(\'classifications\')"]'), 'classification');
             setButtonIcon(document.querySelector('#accountsPage .btn-secondary.btn-sm[onclick="loadAccounts()"]'), 'refresh');
+            setButtonIcon(document.getElementById('accountTokenRefreshBtn'), 'refresh');
             setButtonIcon(document.getElementById('accountsDisplaySettingsBtn'), 'settings');
             setButtonIcon(document.getElementById('accountsSelectAllBtn'), 'error');
             setButtonIcon(document.getElementById('accountsBatchConfigBtn'), 'classification');
@@ -8963,6 +8968,24 @@ example3@live.com----refresh_token3----client_id3`;
             };
         }
 
+        function getRefreshTokenDisplay(account) {
+            const statusMap = {
+                healthy: { label: '正常', color: '#15803d' },
+                auth_error: { label: '认证异常', color: '#b91c1c' },
+                error: { label: '异常', color: '#b91c1c' },
+                unchecked: { label: '未检查', color: '#64748b' }
+            };
+            const status = account.refresh_token_status || 'unchecked';
+            const display = statusMap[status] || statusMap.unchecked;
+            return {
+                label: display.label,
+                color: display.color,
+                summary: account.refresh_token_summary || '未检查',
+                checkedAt: formatDateTime(account.refresh_token_checked_at, '未检查'),
+                rotatedAt: formatDateTime(account.refresh_token_rotated_at, '未轮换')
+            };
+        }
+
         function setAccountHealthProgress(value) {
             const progress = document.getElementById('accountHealthProgressBarInner');
             if (!progress) return;
@@ -9010,6 +9033,29 @@ example3@live.com----refresh_token3----client_id3`;
             }
         }
 
+        async function waitForRefreshTokenCheck(taskId) {
+            while (true) {
+                const state = await apiRequest('/accounts/refresh-tokens');
+                if (taskId && state.task_id && state.task_id !== taskId && !state.running) {
+                    return state;
+                }
+
+                const total = Math.max(0, Number(state.total) || 0);
+                const checked = Math.max(0, Number(state.checked) || 0);
+                const percent = total > 0 ? (checked / total) * 100 : (state.running ? 8 : 100);
+                setAccountHealthProgress(percent);
+
+                if (!state.running) {
+                    setAccountHealthProgress(100);
+                    return state;
+                }
+
+                await new Promise(resolve => {
+                    accountHealthProgressPollTimer = window.setTimeout(resolve, 500);
+                });
+            }
+        }
+
         async function refreshAccountHealth() {
             const button = document.getElementById('accountHealthBtn');
             if (!button) return;
@@ -9035,6 +9081,32 @@ example3@live.com----refresh_token3----client_id3`;
             }
         }
 
+        async function refreshAccountTokens() {
+            const button = document.getElementById('accountTokenRefreshBtn');
+            if (!button) return;
+
+            button.disabled = true;
+            button.innerHTML = buttonLabel('loading', '刷新中...', 'spinning');
+            showAccountHealthProgress();
+            setAccountHealthProgress(8);
+
+            try {
+                const state = await apiRequest('/accounts/refresh-tokens', { method: 'POST' });
+                const result = await waitForRefreshTokenCheck(state.task_id);
+                if (result.error) {
+                    throw new Error(result.error);
+                }
+                await loadAccounts(accountsCurrentPage);
+                showNotification('Refresh Token 刷新任务完成', 'success');
+            } catch (error) {
+                showNotification('刷新 Refresh Token 失败: ' + error.message, 'error');
+            } finally {
+                window.setTimeout(() => hideAccountHealthProgress(), 220);
+                button.disabled = false;
+                button.innerHTML = buttonLabel('refresh', '刷新 Refresh Token');
+            }
+        }
+
         function renderAccountsList() {
             const accountsList = document.getElementById('accountsList');
             if (!accountsList) return;
@@ -9047,6 +9119,7 @@ example3@live.com----refresh_token3----client_id3`;
 
             accountsList.innerHTML = accounts.map(account => {
                 const health = getAccountHealthDisplay(account);
+                const refreshToken = getRefreshTokenDisplay(account);
                 const authMethodLabel = account.auth_method === 'graph' ? 'Graph' : 'IMAP';
                 const categoryHtml = account.category
                     ? `<span class="account-tag category">${escapeHtml(getCategoryLabel(account.category))}</span>`
@@ -9071,6 +9144,8 @@ example3@live.com----refresh_token3----client_id3`;
                                 <h4>${account.email_id}</h4>
                                 <p>接入方式: <strong>${authMethodLabel}</strong> · 健康状态: <strong style="color: ${health.color};">${health.label}</strong> · ${health.score} 分</p>
                                 <p style="color: #64748b;">${escapeHtml(health.summary)} · 上次检查：${escapeHtml(health.checkedAt)}</p>
+                                <p style="color: #64748b;">Refresh Token: <strong style="color: ${refreshToken.color};">${escapeHtml(refreshToken.label)}</strong> · ${escapeHtml(refreshToken.summary)}</p>
+                                <p style="color: #64748b;">Refresh Token 检查：${escapeHtml(refreshToken.checkedAt)} · 更新：${escapeHtml(refreshToken.rotatedAt)}</p>
                                 <div class="account-tags">${categoryHtml}</div>
                                 ${tagsHtml}
                             </div>
@@ -12129,8 +12204,5 @@ Authorization: Bearer om_your_api_key
     </script>
 </body>
 </html>
-
-
-
 
 
