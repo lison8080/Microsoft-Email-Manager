@@ -9422,9 +9422,12 @@ example3@live.com----refresh_token3----client_id3`;
 
         function formatDateTime(value, emptyText = '未设置') {
             if (!value) return emptyText;
-            const date = new Date(value);
+            const normalizedValue = (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value) && !/[zZ]|[+-]\d{2}:?\d{2}$/.test(value))
+                ? `${value}Z`
+                : value;
+            const date = new Date(normalizedValue);
             if (Number.isNaN(date.getTime())) return value;
-            return date.toLocaleString('zh-CN', { hour12: false });
+            return date.toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' });
         }
 
         function toggleApiKeyExpiryMode() {
@@ -12204,5 +12207,4 @@ Authorization: Bearer om_your_api_key
     </script>
 </body>
 </html>
-
 
