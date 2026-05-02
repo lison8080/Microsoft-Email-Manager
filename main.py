@@ -1472,6 +1472,7 @@ def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_t
     if not rotated_token or rotated_token == credentials.refresh_token:
         return False
 
+    credentials.refresh_token = rotated_token
     with auth_lock:
         accounts = _read_json_file(ACCOUNTS_FILE, {})
         if not isinstance(accounts, dict):
@@ -1479,7 +1480,11 @@ def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_t
 
         account_data = accounts.get(credentials.email)
         if not isinstance(account_data, dict):
-            raise HTTPException(status_code=500, detail=f"Account {credentials.email} not found during token rotation")
+            logger.info(
+                "Rotated refresh token for %s before account was saved; pending save will persist it",
+                credentials.email,
+            )
+            return True
 
         account_data["refresh_token"] = rotated_token
         accounts[credentials.email] = account_data

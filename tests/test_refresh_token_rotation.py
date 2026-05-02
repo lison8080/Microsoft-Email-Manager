@@ -88,6 +88,35 @@ def test_get_access_token_persists_rotated_refresh_token(monkeypatch, tmp_path):
     assert health["accounts"]["user@example.com"]["refresh_token_rotated_at"]
 
 
+def test_get_access_token_keeps_rotated_refresh_token_for_new_account(monkeypatch, tmp_path):
+    accounts_file = tmp_path / "accounts.json"
+    write_accounts(accounts_file, {})
+    monkeypatch.setattr(main, "ACCOUNTS_FILE", accounts_file)
+    monkeypatch.setattr(main, "ACCOUNT_HEALTH_FILE", tmp_path / "account_health.json")
+    monkeypatch.setattr(main.httpx, "AsyncClient", FakeAsyncClient)
+    FakeAsyncClient.token_payload = {
+        "access_token": "access-token",
+        "refresh_token": "new-refresh",
+    }
+
+    credentials = main.AccountCredentials(
+        email="new@example.com",
+        refresh_token="old-refresh",
+        client_id="client-id",
+        auth_method="graph",
+    )
+
+    access_token = asyncio.run(main.get_access_token(credentials))
+
+    accounts = read_accounts(accounts_file)
+    health = json.loads((tmp_path / "account_health.json").read_text(encoding="utf-8"))
+    assert access_token == "access-token"
+    assert credentials.refresh_token == "new-refresh"
+    assert accounts == {}
+    assert health["accounts"]["new@example.com"]["refresh_token_status"] == "healthy"
+    assert health["accounts"]["new@example.com"]["refresh_token_summary"] == "Refresh token refreshed and rotated"
+
+
 def test_get_access_token_leaves_refresh_token_when_response_omits_it(monkeypatch, tmp_path):
     accounts_file = tmp_path / "accounts.json"
     write_accounts(
