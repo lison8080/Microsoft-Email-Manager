@@ -8782,24 +8782,33 @@ example3@live.com----refresh_token3----client_id3`;
 
         function parseBatchAccountLine(line, authMethod = 'imap') {
             const parts = line.split('----').map(p => p.trim()).filter(part => part.length > 0);
+            const looksLikeClientId = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '');
+            const looksLikeRefreshToken = (value) => {
+                const token = value || '';
+                return token.length > 24 && !looksLikeClientId(token);
+            };
             if (authMethod === 'graph') {
                 if (parts.length === 4) {
                     const [email, _password, clientId, refreshToken] = parts;
-                    return { email, refreshToken, clientId };
+                    return { email, refreshToken, clientId, authMethod: 'graph' };
                 }
                 if (parts.length === 3) {
                     const [email, refreshToken, clientId] = parts;
-                    return { email, refreshToken, clientId };
+                    return { email, refreshToken, clientId, authMethod: 'graph' };
                 }
                 return null;
             }
             if (parts.length === 3) {
                 const [email, refreshToken, clientId] = parts;
-                return { email, refreshToken, clientId };
+                return { email, refreshToken, clientId, authMethod: 'imap' };
             }
             if (parts.length === 4) {
+                if (looksLikeClientId(parts[2]) && looksLikeRefreshToken(parts[3])) {
+                    const [email, _password, clientId, refreshToken] = parts;
+                    return { email, refreshToken, clientId, authMethod: 'graph' };
+                }
                 const [email, _legacyPassword, refreshToken, clientId] = parts;
-                return { email, refreshToken, clientId };
+                return { email, refreshToken, clientId, authMethod: 'imap' };
             }
             return null;
         }
@@ -9307,6 +9316,7 @@ example3@live.com----refresh_token3----client_id3`;
                 }
 
                 const { email, refreshToken, clientId } = parsedLine;
+                const lineAuthMethod = parsedLine.authMethod || authMethod;
 
                 try {
                     await apiRequest('/accounts', {
@@ -9315,7 +9325,7 @@ example3@live.com----refresh_token3----client_id3`;
                             email: email,
                             refresh_token: refreshToken,
                             client_id: clientId,
-                            auth_method: authMethod,
+                            auth_method: lineAuthMethod,
                             category_key: categoryKey || null,
                             tag_keys: tagKeys
                         })
@@ -12207,4 +12217,3 @@ Authorization: Bearer om_your_api_key
     </script>
 </body>
 </html>
-
