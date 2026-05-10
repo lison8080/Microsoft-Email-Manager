@@ -561,6 +561,28 @@ email_cache = {}  # 邮件列表缓存
 email_count_cache = {}  # 邮件总数缓存，用于检测新邮件
 
 
+def normalize_email_lookup_key(email_id: str | None) -> str:
+    return str(email_id or "").strip().casefold()
+
+
+def resolve_case_insensitive_mapping_key(mapping: dict[str, Any], requested_key: str) -> str:
+    requested = str(requested_key or "").strip()
+    if requested in mapping:
+        return requested
+
+    normalized_requested = normalize_email_lookup_key(requested)
+    for existing_key in mapping.keys():
+        if normalize_email_lookup_key(existing_key) == normalized_requested:
+            return existing_key
+
+    return requested
+
+
+def resolve_account_email_id(email_id: str, accounts: dict[str, Any] | None = None) -> str:
+    account_map = accounts if isinstance(accounts, dict) else load_accounts_data()
+    return resolve_case_insensitive_mapping_key(account_map, email_id)
+
+
 def get_cache_key(email: str, folder: str, page: int, page_size: int) -> str:
     """
     生成缓存键
@@ -629,7 +651,12 @@ def clear_email_cache(email: str = None) -> None:
     """
     if email:
         # 清除特定邮箱的缓存
-        keys_to_delete = [key for key in email_cache.keys() if key.startswith(f"{email}:")]
+        normalized_email = normalize_email_lookup_key(email)
+        keys_to_delete = [
+            key
+            for key in email_cache.keys()
+            if normalize_email_lookup_key(str(key).split(":", 1)[0]) == normalized_email
+        ]
         for key in keys_to_delete:
             del email_cache[key]
         logger.info(f"Cleared cache for {email} ({len(keys_to_delete)} entries)")
@@ -868,29 +895,40 @@ def remove_classification_item(collection_name: str, key: str) -> None:
 
 def get_email_tag_keys(email_id: str, message_id: str) -> list[str]:
     data = load_email_tags_data()
-    email_entries = data.get("emails", {}).get(email_id, {})
+    emails = data.get("emails", {})
+    email_key = resolve_case_insensitive_mapping_key(emails, email_id)
+    email_entries = emails.get(email_key, {})
     if not isinstance(email_entries, dict):
         return []
     return normalize_account_tag_keys(email_entries.get(message_id, []))
 
 
+def get_email_tag_map(email_id: str) -> dict[str, Any]:
+    data = load_email_tags_data()
+    emails = data.get("emails", {})
+    email_key = resolve_case_insensitive_mapping_key(emails, email_id)
+    email_entries = emails.get(email_key, {})
+    return email_entries if isinstance(email_entries, dict) else {}
+
+
 def set_email_tag_keys(email_id: str, message_id: str, tag_keys: list[str]) -> None:
     data = load_email_tags_data()
     emails = data.setdefault("emails", {})
-    email_entries = emails.get(email_id)
+    email_key = resolve_case_insensitive_mapping_key(emails, email_id)
+    email_entries = emails.get(email_key)
     if not isinstance(email_entries, dict):
         email_entries = {}
 
     normalized_tag_keys = normalize_account_tag_keys(tag_keys)
     if normalized_tag_keys:
         email_entries[message_id] = normalized_tag_keys
-        emails[email_id] = email_entries
+        emails[email_key] = email_entries
     else:
         email_entries.pop(message_id, None)
         if email_entries:
-            emails[email_id] = email_entries
+            emails[email_key] = email_entries
         else:
-            emails.pop(email_id, None)
+            emails.pop(email_key, None)
 
     data["emails"] = emails
     save_email_tags_data(data)
@@ -1117,20 +1155,21 @@ async def get_account_credentials(email_id: str) -> AccountCredentials:
             raise HTTPException(status_code=404, detail="No accounts configured")
 
         # 检查指定邮箱是否存在
-        if email_id not in accounts:
+        account_key = resolve_account_email_id(email_id, accounts)
+        if account_key not in accounts:
             logger.warning(f"Account {email_id} not found in accounts file")
             raise HTTPException(status_code=404, detail=f"Account {email_id} not found")
 
         # 验证账户数据完整性
-        account_data = accounts[email_id]
+        account_data = accounts[account_key]
         required_fields = ['refresh_token', 'client_id']
         missing_fields = [field for field in required_fields if not account_data.get(field)]
 
         if missing_fields:
-            logger.error(f"Account {email_id} missing required fields: {missing_fields}")
+            logger.error(f"Account {account_key} missing required fields: {missing_fields}")
             raise HTTPException(status_code=500, detail="Account configuration incomplete")
 
-        return build_account_credentials_from_data(email_id, account_data)
+        return build_account_credentials_from_data(account_key, account_data)
 
     except HTTPException:
         # 重新抛出HTTP异常
@@ -1149,7 +1188,9 @@ async def save_account_credentials(email_id: str, credentials: AccountCredential
         with auth_lock:
             accounts = _read_json_file(ACCOUNTS_FILE, {})
             accounts = accounts if isinstance(accounts, dict) else {}
-            accounts[email_id] = {
+            account_key = resolve_case_insensitive_mapping_key(accounts, email_id)
+            credentials.email = account_key
+            accounts[account_key] = {
                 'refresh_token': credentials.refresh_token,
                 'client_id': credentials.client_id,
                 'auth_method': normalize_account_auth_method(getattr(credentials, 'auth_method', DEFAULT_ACCOUNT_AUTH_METHOD)),
@@ -1160,7 +1201,7 @@ async def save_account_credentials(email_id: str, credentials: AccountCredential
                 ),
             }
             _write_json_file(ACCOUNTS_FILE, accounts)
-        logger.info(f"Account credentials saved for {email_id}")
+        logger.info(f"Account credentials saved for {account_key}")
     except Exception as e:
         logger.error(f"Error saving account credentials: {e}")
         raise HTTPException(status_code=500, detail="Failed to save account")
@@ -1201,7 +1242,8 @@ async def get_all_accounts(
             if email_domain_value:
                 available_email_domains.add(email_domain_value)
 
-            health_record = health_data.get(email_id, {})
+            health_key = resolve_case_insensitive_mapping_key(health_data, email_id)
+            health_record = health_data.get(health_key, {})
             if not isinstance(health_record, dict):
                 health_record = build_account_health_record("unchecked", 0, "未检查")
 
@@ -1437,11 +1479,12 @@ def save_accounts_data(data: dict[str, Any]) -> None:
 def merge_account_health_record(email_id: str, payload: dict[str, Any]) -> dict[str, Any]:
     data = load_account_health_data()
     accounts = data.setdefault("accounts", {})
-    current = accounts.get(email_id, {})
+    email_key = resolve_case_insensitive_mapping_key(accounts, email_id)
+    current = accounts.get(email_key, {})
     if not isinstance(current, dict):
         current = {}
     current.update(payload)
-    accounts[email_id] = current
+    accounts[email_key] = current
     save_account_health_data(data)
     return current
 
@@ -1478,7 +1521,8 @@ def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_t
         if not isinstance(accounts, dict):
             raise HTTPException(status_code=500, detail="Accounts file format error")
 
-        account_data = accounts.get(credentials.email)
+        account_key = resolve_case_insensitive_mapping_key(accounts, str(credentials.email))
+        account_data = accounts.get(account_key)
         if not isinstance(account_data, dict):
             logger.info(
                 "Rotated refresh token for %s before account was saved; pending save will persist it",
@@ -1487,7 +1531,8 @@ def persist_rotated_refresh_token(credentials: AccountCredentials, new_refresh_t
             return True
 
         account_data["refresh_token"] = rotated_token
-        accounts[credentials.email] = account_data
+        accounts[account_key] = account_data
+        credentials.email = account_key
         _write_json_file(ACCOUNTS_FILE, accounts)
 
     logger.info("Persisted rotated refresh token for %s", credentials.email)
@@ -2048,7 +2093,9 @@ def build_public_share_record(email_id: str, meta: dict[str, Any], request: Requ
 
 def get_public_share_meta(email_id: str) -> dict[str, Any]:
     data = load_public_shares_data()
-    meta = data.get("shares", {}).get(email_id, {})
+    shares = data.get("shares", {})
+    share_key = resolve_case_insensitive_mapping_key(shares, email_id)
+    meta = shares.get(share_key, {})
     return meta if isinstance(meta, dict) else {}
 
 
@@ -2167,16 +2214,17 @@ def record_admin_login_failure(request: Request) -> dict[str, Any]:
 
 
 def revoke_open_access_sessions(email_id: str) -> None:
+    normalized_email = normalize_email_lookup_key(email_id)
     data = load_open_access_data()
     sessions = {
         token_hash: meta
         for token_hash, meta in data.get("sessions", {}).items()
-        if not (isinstance(meta, dict) and meta.get("email_id") == email_id)
+        if not (isinstance(meta, dict) and normalize_email_lookup_key(meta.get("email_id")) == normalized_email)
     }
     failed_attempts = {
         key: meta
         for key, meta in data.get("failed_attempts", {}).items()
-        if not (isinstance(meta, dict) and meta.get("email_id") == email_id)
+        if not (isinstance(meta, dict) and normalize_email_lookup_key(meta.get("email_id")) == normalized_email)
     }
     save_open_access_data({"sessions": sessions, "failed_attempts": failed_attempts})
 
@@ -2273,7 +2321,7 @@ def get_open_access_session(request: Request, email_id: str) -> dict[str, Any] |
     meta = sessions.get(token_hash)
     if not isinstance(meta, dict):
         return None
-    if meta.get("email_id") != email_id:
+    if normalize_email_lookup_key(meta.get("email_id")) != normalize_email_lookup_key(email_id):
         return None
     if float(meta.get("expires_at_ts", 0)) <= time.time():
         return None
@@ -2301,7 +2349,9 @@ def build_account_health_record(status: str, score: int, summary: str, detail: s
 
 def get_account_health_record(email_id: str) -> dict[str, Any]:
     data = load_account_health_data()
-    record = data.get("accounts", {}).get(email_id, {})
+    accounts = data.get("accounts", {})
+    email_key = resolve_case_insensitive_mapping_key(accounts, email_id)
+    record = accounts.get(email_key, {})
     if not isinstance(record, dict):
         return build_account_health_record("unchecked", 0, "未检查")
     return {
@@ -2316,18 +2366,21 @@ def get_account_health_record(email_id: str) -> dict[str, Any]:
 def save_account_health_record(email_id: str, record: dict[str, Any]) -> None:
     data = load_account_health_data()
     accounts = data.setdefault("accounts", {})
-    current = accounts.get(email_id, {})
+    email_key = resolve_case_insensitive_mapping_key(accounts, email_id)
+    current = accounts.get(email_key, {})
     if not isinstance(current, dict):
         current = {}
     current.update(record)
-    accounts[email_id] = current
+    accounts[email_key] = current
     save_account_health_data(data)
 
 
 def remove_account_health_record(email_id: str) -> None:
     data = load_account_health_data()
-    if email_id in data.get("accounts", {}):
-        del data["accounts"][email_id]
+    accounts = data.get("accounts", {})
+    email_key = resolve_case_insensitive_mapping_key(accounts, email_id)
+    if email_key in accounts:
+        del accounts[email_key]
         save_account_health_data(data)
 
 
@@ -2835,7 +2888,7 @@ async def validate_account_credentials(credentials: AccountCredentials) -> dict[
 async def refresh_account_health(email_id: str) -> dict[str, Any]:
     credentials = await get_account_credentials(email_id)
     record = await evaluate_account_health(credentials)
-    save_account_health_record(email_id, record)
+    save_account_health_record(str(credentials.email), record)
     return record
 
 
@@ -3102,7 +3155,7 @@ async def list_graph_emails(
 
     access_token = await get_access_token(credentials)
     catalog = load_account_classifications_data()
-    email_tag_map = load_email_tags_data().get("emails", {}).get(str(credentials.email), {})
+    email_tag_map = get_email_tag_map(str(credentials.email))
 
     if folder in {"inbox", "junk"}:
         emails, total_emails = await list_graph_folder_emails(credentials, access_token, folder, page_size, page=page)
@@ -3180,7 +3233,7 @@ async def list_emails(credentials: AccountCredentials, folder: str, page: int, p
         imap_client = None
         try:
             catalog = load_account_classifications_data()
-            email_tag_map = load_email_tags_data().get("emails", {}).get(str(credentials.email), {})
+            email_tag_map = get_email_tag_map(str(credentials.email))
             # 从连接池获取连接
             imap_client = imap_pool.get_connection(credentials.email, access_token)
             
@@ -3876,15 +3929,17 @@ async def delete_api_key(key_id: str, request: Request):
 @app.get("/api/public-shares/{email_id}")
 async def get_public_share_config(email_id: str, request: Request):
     require_authenticated(request)
-    await get_account_credentials(email_id)
-    meta = get_public_share_meta(email_id)
-    return build_public_share_record(email_id, meta, request)
+    credentials = await get_account_credentials(email_id)
+    canonical_email_id = str(credentials.email)
+    meta = get_public_share_meta(canonical_email_id)
+    return build_public_share_record(canonical_email_id, meta, request)
 
 
 @app.put("/api/public-shares/{email_id}")
 async def update_public_share_config(email_id: str, payload: PublicShareConfigPayload, request: Request):
     require_authenticated(request)
-    await get_account_credentials(email_id)
+    credentials = await get_account_credentials(email_id)
+    canonical_email_id = str(credentials.email)
 
     now = datetime.utcnow()
     expires_mode = (payload.expires_mode or "never").strip().lower()
@@ -3907,7 +3962,8 @@ async def update_public_share_config(email_id: str, payload: PublicShareConfigPa
 
     data = load_public_shares_data()
     shares = data.setdefault("shares", {})
-    existing_meta = shares.get(email_id, {})
+    existing_share_key = resolve_case_insensitive_mapping_key(shares, canonical_email_id)
+    existing_meta = shares.get(existing_share_key, {})
     existing_meta = existing_meta if isinstance(existing_meta, dict) else {}
 
     password_hash = existing_meta.get("password_hash", "")
@@ -3923,7 +3979,10 @@ async def update_public_share_config(email_id: str, payload: PublicShareConfigPa
         password_updated_at = now.isoformat()
         password_changed = True
 
-    shares[email_id] = {
+    if existing_share_key != canonical_email_id:
+        shares.pop(existing_share_key, None)
+
+    shares[canonical_email_id] = {
         "enabled": bool(payload.enabled),
         "expires_at": expires_at.isoformat() if expires_at else None,
         "password_hash": password_hash,
@@ -3935,53 +3994,55 @@ async def update_public_share_config(email_id: str, payload: PublicShareConfigPa
     save_public_shares_data(data)
 
     if not payload.enabled or password_changed:
-        revoke_open_access_sessions(email_id)
+        revoke_open_access_sessions(canonical_email_id)
 
-    return build_public_share_record(email_id, shares[email_id], request)
+    return build_public_share_record(canonical_email_id, shares[canonical_email_id], request)
 
 
 @app.get("/api/open/emails/{email_id}/status")
 async def get_open_email_status(email_id: str, request: Request):
-    meta = get_public_share_meta(email_id)
+    credentials = await get_account_credentials(email_id)
+    canonical_email_id = str(credentials.email)
+    meta = get_public_share_meta(canonical_email_id)
     if not is_public_share_active(meta):
         raise HTTPException(status_code=404, detail="Public page unavailable")
-    await get_account_credentials(email_id)
     site_settings = load_site_settings()
 
     return {
-        "email_id": email_id,
+        "email_id": canonical_email_id,
         "status": "active",
         "expires_at": meta.get("expires_at"),
         "requires_password": bool(meta.get("password_hash")),
-        "access_granted": not bool(meta.get("password_hash")) or bool(get_open_access_session(request, email_id)),
-        "public_url": build_public_share_url(request, email_id),
+        "access_granted": not bool(meta.get("password_hash")) or bool(get_open_access_session(request, canonical_email_id)),
+        "public_url": build_public_share_url(request, canonical_email_id),
         "turnstile": build_public_turnstile_client_config(site_settings),
     }
 
 
 @app.post("/api/open/emails/{email_id}/access")
 async def create_open_email_access(email_id: str, payload: PublicShareAccessPayload, request: Request):
-    meta = get_public_share_meta(email_id)
+    credentials = await get_account_credentials(email_id)
+    canonical_email_id = str(credentials.email)
+    meta = get_public_share_meta(canonical_email_id)
     if not is_public_share_active(meta):
         raise HTTPException(status_code=404, detail="Public page unavailable")
-    await get_account_credentials(email_id)
 
     if not meta.get("password_hash"):
         return {"ok": True, "requires_password": False}
 
-    blocked_state = get_open_access_block_state(email_id, request)
+    blocked_state = get_open_access_block_state(canonical_email_id, request)
     if blocked_state:
         raise HTTPException(status_code=429, detail="Too many password attempts. Try again later.")
 
     await enforce_turnstile(request, payload.turnstile_token, "public_access")
     if not verify_password(payload.password, meta.get("password_hash")):
-        failure_state = record_open_access_failure(email_id, request)
+        failure_state = record_open_access_failure(canonical_email_id, request)
         if parse_stored_datetime(failure_state.get("blocked_until")):
             raise HTTPException(status_code=429, detail="Too many password attempts. Try again later.")
         raise HTTPException(status_code=401, detail="Access password is incorrect")
 
-    clear_open_access_failures(email_id, request)
-    raw_token, expires_at = create_open_access_session(email_id, meta)
+    clear_open_access_failures(canonical_email_id, request)
+    raw_token, expires_at = create_open_access_session(canonical_email_id, meta)
     response = JSONResponse(
         {
             "ok": True,
@@ -3991,7 +4052,7 @@ async def create_open_email_access(email_id: str, payload: PublicShareAccessPayl
     )
     max_age = max(60, int((parse_stored_datetime(expires_at) - datetime.utcnow()).total_seconds()))
     response.set_cookie(
-        get_public_share_cookie_name(email_id),
+        get_public_share_cookie_name(canonical_email_id),
         raw_token,
         max_age=max_age,
         expires=max_age,
@@ -4012,15 +4073,15 @@ async def get_open_emails(
     page_size: int = Query(100, ge=1, le=500),
     refresh: bool = Query(False, description="强制刷新缓存")
 ):
-    require_public_share_access(request, email_id)
     credentials = await get_account_credentials(email_id)
+    require_public_share_access(request, str(credentials.email))
     return await list_emails(credentials, folder, page, page_size, refresh)
 
 
 @app.get("/api/open/emails/{email_id}/{message_id}", response_model=EmailDetailsResponse)
 async def get_open_email_detail(email_id: str, message_id: str, request: Request):
-    require_public_share_access(request, email_id)
     credentials = await get_account_credentials(email_id)
+    require_public_share_access(request, str(credentials.email))
     return await get_email_details(credentials, message_id)
 
 
@@ -4177,7 +4238,7 @@ async def get_dual_view_emails(
     junk_response = await list_emails(credentials, "junk", junk_page, page_size)
     
     return DualViewEmailResponse(
-        email_id=email_id,
+        email_id=credentials.email,
         inbox_emails=inbox_response.emails,
         junk_emails=junk_response.emails,
         inbox_total=inbox_response.total_emails,
@@ -4202,10 +4263,10 @@ async def update_account_classification(email_id: str, payload: UpdateAccountCla
         credentials.tags = list(tag_keys)
 
         # 保存更新后的凭证
-        await save_account_credentials(email_id, credentials)
+        await save_account_credentials(str(credentials.email), credentials)
 
         return AccountResponse(
-            email_id=email_id,
+            email_id=credentials.email,
             message="Account classification updated successfully."
         )
     except HTTPException:
@@ -4230,16 +4291,17 @@ async def get_email_detail(email_id: str, message_id: str, request: Request):
 @app.put("/emails/{email_id}/{message_id}/tags", response_model=EmailTagUpdateResponse)
 async def update_email_tags(email_id: str, message_id: str, payload: UpdateEmailTagsRequest, request: Request):
     require_authenticated(request, allow_api_key=True)
-    await get_account_credentials(email_id)
+    credentials = await get_account_credentials(email_id)
+    canonical_email_id = str(credentials.email)
 
     tag_keys = normalize_account_tag_keys(payload.tag_keys, payload.tags)
     catalog = load_account_classifications_data()
     validate_catalog_references(None, tag_keys, catalog)
-    set_email_tag_keys(email_id, message_id, tag_keys)
-    clear_email_cache(email_id)
+    set_email_tag_keys(canonical_email_id, message_id, tag_keys)
+    clear_email_cache(canonical_email_id)
 
     return EmailTagUpdateResponse(
-        email_id=email_id,
+        email_id=canonical_email_id,
         message_id=message_id,
         message="Email tags updated successfully.",
         tag_keys=tag_keys,
@@ -4252,33 +4314,40 @@ async def delete_account(email_id: str, request: Request):
     require_authenticated(request, allow_api_key=True)
     try:
         # 检查账户是否存在
-        await get_account_credentials(email_id)
+        credentials = await get_account_credentials(email_id)
+        canonical_email_id = str(credentials.email)
 
         deleted = False
         with auth_lock:
             accounts = _read_json_file(ACCOUNTS_FILE, {})
             accounts = accounts if isinstance(accounts, dict) else {}
-            if email_id in accounts:
-                del accounts[email_id]
+            account_key = resolve_case_insensitive_mapping_key(accounts, canonical_email_id)
+            if account_key in accounts:
+                del accounts[account_key]
                 _write_json_file(ACCOUNTS_FILE, accounts)
                 deleted = True
 
         if not deleted:
             raise HTTPException(status_code=404, detail="Account not found")
 
-        remove_account_health_record(email_id)
+        remove_account_health_record(canonical_email_id)
         public_shares_data = load_public_shares_data()
-        if email_id in public_shares_data.get("shares", {}):
-            del public_shares_data["shares"][email_id]
+        shares = public_shares_data.get("shares", {})
+        share_key = resolve_case_insensitive_mapping_key(shares, canonical_email_id)
+        if share_key in shares:
+            del shares[share_key]
             save_public_shares_data(public_shares_data)
         email_tags_data = load_email_tags_data()
-        if email_id in email_tags_data.get("emails", {}):
-            del email_tags_data["emails"][email_id]
+        emails = email_tags_data.get("emails", {})
+        email_tags_key = resolve_case_insensitive_mapping_key(emails, canonical_email_id)
+        if email_tags_key in emails:
+            del emails[email_tags_key]
             save_email_tags_data(email_tags_data)
-        revoke_open_access_sessions(email_id)
+        revoke_open_access_sessions(canonical_email_id)
+        clear_email_cache(canonical_email_id)
         
         return AccountResponse(
-            email_id=email_id,
+            email_id=canonical_email_id,
             message="Account deleted successfully."
         )
             
